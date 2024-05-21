@@ -264,7 +264,7 @@ const settings = definePluginSettings({
 export default definePlugin({
     name: "VoiceCommands",
     description: "Adds context menu options for managing voice channels (!voice-kick, !voice-lock ...)",
-    authors: [Devs.aequabit],
+    authors: [Devs.Nobody],
     settings,
     contextMenus: {
         "user-context": UserContextMenuPatch,
