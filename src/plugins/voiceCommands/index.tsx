@@ -17,11 +17,11 @@
 */
 
 import { NavContextMenuPatchCallback } from "@api/ContextMenu";
-import { definePluginSettings } from "@api/Settings";
+import { definePluginSettings, Settings } from "@api/Settings";
 import { Devs } from "@utils/constants";
 import definePlugin, { OptionType } from "@utils/types";
 import { findStoreLazy } from "@webpack";
-import { Menu, RestAPI, SelectedChannelStore, SnowflakeUtils, UserStore } from "@webpack/common";
+import { ChannelStore, Menu, RestAPI, SelectedChannelStore, SnowflakeUtils, UserStore } from "@webpack/common";
 import type { Channel, User } from "discord-types/general";
 
 interface UserContextProps {
@@ -35,6 +35,16 @@ interface ChannelContextProps {
 }
 
 const VoiceStateStore = findStoreLazy("VoiceStateStore");
+
+interface VoiceState {
+    userId: string;
+    channelId?: string;
+    oldChannelId?: string;
+    deaf: boolean;
+    mute: boolean;
+    selfDeaf: boolean;
+    selfMute: boolean;
+}
 
 function sendMessage(channelId: string, content: string) {
     RestAPI.post({
@@ -50,6 +60,54 @@ function sendMessage(channelId: string, content: string) {
         }
     });
 }
+
+function getBlockedUsers(): string[] {
+    const blockedUserList: string = Settings.plugins.VoiceCommands?.blockedUserIDs;
+
+    // Hope this helps
+    return blockedUserList
+        .trim()
+        .split(",")
+        .map(x => x.trim())
+        .filter(x => x.length > 0);
+}
+
+function blockUser(userId: string) {
+    const blockedUsers = getBlockedUsers();
+    if (blockedUsers.includes(userId)) return; // Already blocked
+    blockedUsers.push(userId);
+    Settings.plugins.VoiceCommands.blockedUserIDs = blockedUsers.join(",");
+}
+
+function unblockUser(userId: string) {
+    const blockedUsers = getBlockedUsers();
+    const blockedUserIndex = blockedUsers.indexOf(userId);
+    if (blockedUserIndex === -1) return; // User not blocked
+    blockedUsers.splice(blockedUserIndex, 1);
+    Settings.plugins.VoiceCommands.blockedUserIDs = blockedUsers.join(",");
+}
+
+const onVoiceStateUpdates = ({ voiceStates }: { voiceStates: VoiceState[]; }) => {
+    const me = UserStore.getCurrentUser();
+
+    // Get our current voice state of the selected user
+    const userVoiceState = VoiceStateStore.getVoiceStateForUser(me.id);
+    if (!userVoiceState) return;
+
+    const voiceChannelId = userVoiceState.channelId;
+
+    // Ignore Stage Channels
+    if (ChannelStore.getChannel(voiceChannelId)?.type === 13) return;
+
+    for (const state of voiceStates) {
+        const { userId, channelId, oldChannelId } = state;
+        if (userId === me.id) continue; // It's us
+        if (channelId !== voiceChannelId) continue; // User is not in our channel
+        if (!getBlockedUsers().includes(userId)) continue; // User isn't blocked
+
+        sendMessage(voiceChannelId, `!voice-ban <@${userId}>`);
+    }
+};
 
 const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: UserContextProps) => {
     if (!user || user.id === UserStore.getCurrentUser().id) return;
@@ -89,6 +147,24 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
                 id="vc-unban-user"
                 label="Unban user"
                 action={() => sendMessage(voiceChannelId, `!voice-unban <@${userVoiceState.userId}>`)}
+            />
+        );
+
+    if (settings.store.voiceBlock)
+        children.push(
+            <Menu.MenuItem
+                id="vc-block-user"
+                label="Block user"
+                action={() => blockUser(user.id)}
+            />
+        );
+
+    if (settings.store.voiceUnblock)
+        children.push(
+            <Menu.MenuItem
+                id="vc-unblock-user"
+                label="Unblock user"
+                action={() => unblockUser(user.id)}
             />
         );
 
@@ -214,6 +290,16 @@ const settings = definePluginSettings({
         description: "Add !voice-unban shortcut to user context menus",
         default: true
     },
+    voiceBlock: {
+        type: OptionType.BOOLEAN,
+        description: "Adds the option to block a user to context menus",
+        default: false
+    },
+    voiceUnblock: {
+        type: OptionType.BOOLEAN,
+        description: "Adds the option to unblock a user to context menus",
+        default: false
+    },
     voiceTransfer: {
         type: OptionType.BOOLEAN,
         description: "Add !voice-transfer shortcut to user context menus",
@@ -258,6 +344,11 @@ const settings = definePluginSettings({
         type: OptionType.BOOLEAN,
         description: "Add !voice-reveal shortcut to channel context menus",
         default: false
+    },
+    blockedUserIDs: {
+        type: OptionType.STRING,
+        description: "IDs of blocked users (comma-separated)",
+        default: ""
     }
 });
 
@@ -265,6 +356,9 @@ export default definePlugin({
     name: "VoiceCommands",
     description: "Adds context menu options for managing voice channels (!voice-kick, !voice-lock ...)",
     authors: [Devs.Nobody],
+    flux: {
+        VOICE_STATE_UPDATES: onVoiceStateUpdates
+    },
     settings,
     contextMenus: {
         "user-context": UserContextMenuPatch,
