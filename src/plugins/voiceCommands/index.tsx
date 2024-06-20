@@ -197,24 +197,6 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
     // No voice channel or not the current one
     if (!voiceChannelId || userVoiceState.channelId !== voiceChannelId) return;
 
-    if (settings.store.voiceClean)
-        children.push(
-            <Menu.MenuItem
-                id="vc-clean"
-                label="Clean channels"
-                action={() => sendMessage(channel.id, "!voice-clean")}
-            />
-        );
-
-    if (settings.store.voiceClaim)
-        children.push(
-            <Menu.MenuItem
-                id="vc-claim"
-                label="Claim channel"
-                action={() => sendMessage(channel.id, "!voice-claim")}
-            />
-        );
-
     if (settings.store.voiceLimit) {
         const userLimitOptions = settings.store.voiceLimitOptions
             .split(",")
@@ -240,13 +222,60 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
         );
     }
 
-    children.push(
-        <Menu.MenuItem
-            id="vc-change-name"
-            label="Change name"
-            action={() => openChannelNameChangeModal()}
-        />
-    );
+    if (settings.store.voiceRename) {
+        if (settings.store.voiceRenamePresets.length > 0) {
+            const ESCAPE_SEQUENCE = "#$#COMMA#$#";
+            const voiceRenamePresets = settings.store.voiceRenamePresets
+                .split("\\,").join(ESCAPE_SEQUENCE) // Escape commas
+                .split(",")
+                .map(x => x.split(ESCAPE_SEQUENCE).join(",")); // Unescape commas
+
+            const voiceRenamePresetElements: JSX.Element[] = [];
+            for (const [i, option] of Object.entries(voiceRenamePresets))
+                voiceRenamePresetElements.push(
+                    <Menu.MenuItem
+                        id={"vc-rename-" + i}
+                        label={option}
+                        action={() => sendMessage(channel.id, `!voice-rename ${option}`)}
+                    />
+                );
+
+            voiceRenamePresetElements.push(
+                <Menu.MenuItem
+                    id="vc-change-name"
+                    label="Enter new name"
+                    action={() => openChannelNameChangeModal()}
+                />
+            );
+
+            children.push(
+                <Menu.MenuItem
+                    id="vc-change-name-presets"
+                    label="Change name"
+                >
+                    {voiceRenamePresetElements}
+                </Menu.MenuItem>
+            );
+        } else {
+            children.push(
+                <Menu.MenuItem
+                    id="vc-change-name"
+                    label="Change name"
+                    action={() => openChannelNameChangeModal()}
+                />
+            );
+        }
+    }
+
+
+    if (settings.store.voiceClaim)
+        children.push(
+            <Menu.MenuItem
+                id="vc-claim"
+                label="Claim channel"
+                action={() => sendMessage(channel.id, "!voice-claim")}
+            />
+        );
 
     if (settings.store.voiceLock)
         children.push(
@@ -290,7 +319,7 @@ export function ChannelNameModal({ modalProps }: { modalProps: ModalProps; }) {
 
     const me = UserStore.getCurrentUser();
     const userVoiceState = VoiceStateStore.getVoiceStateForUser(me.id);
-    if (!userVoiceState) return;
+    if (!userVoiceState) return null;
 
     const onSave = async (e: React.FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
         e.preventDefault();
@@ -359,16 +388,6 @@ const settings = definePluginSettings({
         description: "Add !voice-transfer shortcut to user context menus",
         default: true
     },
-    voiceClean: {
-        type: OptionType.BOOLEAN,
-        description: "Add !voice-clean shortcut to channel context menus",
-        default: false
-    },
-    voiceClaim: {
-        type: OptionType.BOOLEAN,
-        description: "Add !voice-claim shortcut to channel context menus",
-        default: true
-    },
     voiceLimit: {
         type: OptionType.BOOLEAN,
         description: "Add !voice-limit shortcut to channel context menus",
@@ -378,6 +397,21 @@ const settings = definePluginSettings({
         type: OptionType.STRING,
         description: "Options to show in the limit setting (comma-separated numbers)",
         default: "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18"
+    },
+    voiceRename: {
+        type: OptionType.BOOLEAN,
+        description: "Add !voice-rename shortcut to channel context menus",
+        default: true
+    },
+    voiceRenamePresets: {
+        type: OptionType.STRING,
+        description: "Preset names to show in the rename menu (comma-separated, escape commas using \\,)",
+        default: ""
+    },
+    voiceClaim: {
+        type: OptionType.BOOLEAN,
+        description: "Add !voice-claim shortcut to channel context menus",
+        default: true
     },
     voiceLock: {
         type: OptionType.BOOLEAN,
