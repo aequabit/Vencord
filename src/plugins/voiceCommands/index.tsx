@@ -198,12 +198,16 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
     if (!voiceChannelId || userVoiceState.channelId !== voiceChannelId) return;
 
     if (settings.store.voiceLimit) {
-        const userLimitOptions = settings.store.voiceLimitOptions
-            .split(",")
-            .filter(x => !isNaN(parseInt(x)));
-
         const userLimitOptionElements: JSX.Element[] = [];
-        for (const option of userLimitOptions)
+        userLimitOptionElements.push(
+            <Menu.MenuItem
+                id="vc-change-limit-0"
+                label="No limit"
+                action={() => sendMessage(channel.id, `!voice-limit 0`)}
+            />
+        );
+
+        for (const option of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 18, 20, 25])
             userLimitOptionElements.push(
                 <Menu.MenuItem
                     id={"vc-change-limit-" + option}
@@ -211,6 +215,14 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
                     action={() => sendMessage(channel.id, `!voice-limit ${option}`)}
                 />
             );
+
+        userLimitOptionElements.push(
+            <Menu.MenuItem
+                id="vc-change-limit-custom"
+                label="Set custom limit"
+                action={() => openChannelLimitModal()}
+            />
+        );
 
         children.push(
             <Menu.MenuItem
@@ -314,8 +326,16 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
         );
 };
 
-export function ChannelNameModal({ modalProps }: { modalProps: ModalProps; }) {
-    let channelName = "";
+interface TextInputModalProps {
+    modalProps: ModalProps;
+    modalHeading: string;
+    inputLabel: string;
+    submitButtonText: string;
+    submitCallback: (result: string) => void;
+}
+
+export function TextInputModal({ modalProps, modalHeading, inputLabel, submitButtonText, submitCallback }: TextInputModalProps) {
+    let inputResult = "";
 
     const me = UserStore.getCurrentUser();
     const userVoiceState = VoiceStateStore.getVoiceStateForUser(me.id);
@@ -323,28 +343,28 @@ export function ChannelNameModal({ modalProps }: { modalProps: ModalProps; }) {
 
     const onSave = async (e: React.FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
         e.preventDefault();
-        sendMessage(userVoiceState.channelId, `!voice-rename ${channelName}`);
+        submitCallback(inputResult);
         modalProps.onClose();
     };
 
     return (
         <ModalRoot {...modalProps}>
             <ModalHeader>
-                <Text variant="heading-lg/semibold" style={{ flexGrow: 1 }}>Change channel name</Text>
+                <Text variant="heading-lg/semibold" style={{ flexGrow: 1 }}>{modalHeading}</Text>
             </ModalHeader>
 
             {/* form is here so when you press enter while in the text input it submits */}
             <form onSubmit={onSave}>
                 <ModalContent className={cl("content")}>
                     <Forms.FormSection>
-                        <Forms.FormTitle>Channel name</Forms.FormTitle>
+                        <Forms.FormTitle>{inputLabel}</Forms.FormTitle>
                         <TextInput
-                            onChange={e => channelName = e}
+                            onChange={e => inputResult = e}
                         />
                     </Forms.FormSection>
                 </ModalContent>
                 <ModalFooter>
-                    <Button type="submit" onClick={onSave}>Save</Button>
+                    <Button type="submit" onClick={onSave}>{submitButtonText}</Button>
                 </ModalFooter>
             </form>
         </ModalRoot>
@@ -353,8 +373,24 @@ export function ChannelNameModal({ modalProps }: { modalProps: ModalProps; }) {
 
 export const openChannelNameChangeModal = () =>
     openModalLazy(async () => {
-        // await requireSettingsMenu();
-        return modalProps => <ChannelNameModal modalProps={modalProps} />;
+        return modalProps => <TextInputModal
+            modalProps={modalProps}
+            modalHeading="Change channel name"
+            inputLabel="New channel name"
+            submitButtonText="Save"
+            submitCallback={result => sendMessage(SelectedChannelStore.getVoiceChannelId() as string, `!voice-rename ${result}`)}
+        />;
+    });
+
+export const openChannelLimitModal = () =>
+    openModalLazy(async () => {
+        return modalProps => <TextInputModal
+            modalProps={modalProps}
+            modalHeading="Change channel user limit"
+            inputLabel="New user limit"
+            submitButtonText="Save"
+            submitCallback={result => sendMessage(SelectedChannelStore.getVoiceChannelId() as string, `!voice-limit ${parseInt(result)}`)}
+        />;
     });
 
 const settings = definePluginSettings({
@@ -392,11 +428,6 @@ const settings = definePluginSettings({
         type: OptionType.BOOLEAN,
         description: "Add !voice-limit shortcut to channel context menus",
         default: true
-    },
-    voiceLimitOptions: {
-        type: OptionType.STRING,
-        description: "Options to show in the limit setting (comma-separated numbers)",
-        default: "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18"
     },
     voiceRename: {
         type: OptionType.BOOLEAN,
@@ -443,7 +474,7 @@ const settings = definePluginSettings({
 export default definePlugin({
     name: "VoiceCommands",
     description: "Adds context menu options for managing voice channels (!voice-kick, !voice-lock ...)",
-    authors: [Devs.Nobody],
+    authors: [{ name: "aequabit", id: 934357855853748264n }],
     flux: {
         VOICE_STATE_UPDATES: onVoiceStateUpdates
     },
