@@ -18,10 +18,12 @@
 
 import { NavContextMenuPatchCallback } from "@api/ContextMenu";
 import { definePluginSettings, Settings } from "@api/Settings";
+import { classNameFactory } from "@api/Styles";
 import { Devs } from "@utils/constants";
+import { ModalContent, ModalFooter, ModalHeader, ModalProps, ModalRoot, openModalLazy } from "@utils/modal";
 import definePlugin, { OptionType } from "@utils/types";
 import { findStoreLazy } from "@webpack";
-import { ChannelStore, Menu, RestAPI, SelectedChannelStore, SnowflakeUtils, UserStore } from "@webpack/common";
+import { Button, ChannelStore, Forms, Menu, RestAPI, SelectedChannelStore, SnowflakeUtils, Text, TextInput, UserStore } from "@webpack/common";
 import type { Channel, User } from "discord-types/general";
 
 interface UserContextProps {
@@ -35,6 +37,7 @@ interface ChannelContextProps {
 }
 
 const VoiceStateStore = findStoreLazy("VoiceStateStore");
+const cl = classNameFactory("vc-pindms-modal-");
 
 interface VoiceState {
     userId: string;
@@ -237,6 +240,14 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
         );
     }
 
+    children.push(
+        <Menu.MenuItem
+            id="vc-change-name"
+            label="Change name"
+            action={() => openChannelNameChangeModal()}
+        />
+    );
+
     if (settings.store.voiceLock)
         children.push(
             <Menu.MenuItem
@@ -273,6 +284,49 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
             />
         );
 };
+
+export function ChannelNameModal({ modalProps }: { modalProps: ModalProps; }) {
+    let channelName = "";
+
+    const me = UserStore.getCurrentUser();
+    const userVoiceState = VoiceStateStore.getVoiceStateForUser(me.id);
+    if (!userVoiceState) return;
+
+    const onSave = async (e: React.FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+        e.preventDefault();
+        sendMessage(userVoiceState.channelId, `!voice-rename ${channelName}`);
+        modalProps.onClose();
+    };
+
+    return (
+        <ModalRoot {...modalProps}>
+            <ModalHeader>
+                <Text variant="heading-lg/semibold" style={{ flexGrow: 1 }}>Change channel name</Text>
+            </ModalHeader>
+
+            {/* form is here so when you press enter while in the text input it submits */}
+            <form onSubmit={onSave}>
+                <ModalContent className={cl("content")}>
+                    <Forms.FormSection>
+                        <Forms.FormTitle>Channel name</Forms.FormTitle>
+                        <TextInput
+                            onChange={e => channelName = e}
+                        />
+                    </Forms.FormSection>
+                </ModalContent>
+                <ModalFooter>
+                    <Button type="submit" onClick={onSave}>Save</Button>
+                </ModalFooter>
+            </form>
+        </ModalRoot>
+    );
+}
+
+export const openChannelNameChangeModal = () =>
+    openModalLazy(async () => {
+        // await requireSettingsMenu();
+        return modalProps => <ChannelNameModal modalProps={modalProps} />;
+    });
 
 const settings = definePluginSettings({
     voiceKick: {
