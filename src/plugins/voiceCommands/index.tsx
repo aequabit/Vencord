@@ -19,12 +19,60 @@
 import { NavContextMenuPatchCallback } from "@api/ContextMenu";
 import { definePluginSettings, Settings } from "@api/Settings";
 import { classNameFactory } from "@api/Styles";
-import { Devs } from "@utils/constants";
+import { Icon } from "@components/Icons";
+import { classes } from "@utils/misc";
 import { ModalContent, ModalFooter, ModalHeader, ModalProps, ModalRoot, openModalLazy } from "@utils/modal";
 import definePlugin, { OptionType } from "@utils/types";
-import { findStoreLazy } from "@webpack";
+import { findLazy, findStoreLazy } from "@webpack";
 import { Button, ChannelStore, Forms, Menu, RestAPI, SelectedChannelStore, SnowflakeUtils, Text, TextInput, UserStore } from "@webpack/common";
-import type { Channel, User } from "discord-types/general";
+import type { Channel, Message, User } from "discord-types/general";
+import { PropsWithChildren } from "react";
+
+type IconProps = JSX.IntrinsicElements["svg"];
+interface BaseIconProps extends IconProps {
+    viewBox: string;
+}
+function Icon({ height = 24, width = 24, className, children, viewBox, ...svgProps }: PropsWithChildren<BaseIconProps>) {
+    return (
+        <svg
+            className={classes(className, "vc-icon")}
+            role="img"
+            width={width}
+            height={height}
+            viewBox={viewBox}
+            {...svgProps}
+        >
+            {children}
+        </svg>
+    );
+}
+
+function CheckmarkIcon({ height = 24, width = 24, className }: IconProps) {
+    return (
+        <Icon
+            height={height}
+            width={width}
+            className={classes(className, "vc-checkmark-icon")}
+            viewBox="0 0 24 24"
+        >
+            <g fill="none" fill-rule="evenodd">
+                <path fill="var(--white-500)" fill-rule="evenodd" d="M12 23a11 11 0 1 0 0-22 11 11 0 0 0 0 22Zm5.7-13.3a1 1 0 0 0-1.4-1.4L10 14.58l-2.3-2.3a1 1 0 0 0-1.4 1.42l3 3a1 1 0 0 0 1.4 0l7-7Z" clip-rule="evenodd" ></path>
+            </g>
+        </Icon>
+    );
+}
+
+function EmptyIcon({ height = 24, width = 24, className }: IconProps) {
+    return (
+        <Icon
+            height={height}
+            width={width}
+            className={classes(className, "vc-link-icon")}
+            viewBox="0 0 24 24"
+        >
+        </Icon>
+    );
+}
 
 interface UserContextProps {
     channel: Channel;
@@ -36,6 +84,7 @@ interface ChannelContextProps {
     channel: Channel;
 }
 
+const ChannelTypes = findLazy(m => m.ANNOUNCEMENT_THREAD === 10);
 const VoiceStateStore = findStoreLazy("VoiceStateStore");
 const cl = classNameFactory("vc-pindms-modal-");
 
@@ -64,16 +113,29 @@ function sendMessage(channelId: string, content: string) {
     });
 }
 
-function getBlockedUsers(): string[] {
-    const blockedUserList: string = Settings.plugins.VoiceCommands?.blockedUserIDs;
-
+function parseUserIDList(userIDList: string): string[] {
     // Hope this helps
-    return blockedUserList
+    return userIDList
         .trim()
         .split(",")
         .map(x => x.trim())
         .filter(x => x.length > 0);
 }
+
+interface UserAttributeList { [key: string]: string[]; }
+function parseUserAttributeList(userAttributeList: string): UserAttributeList {
+    try {
+        return JSON.parse(userAttributeList);
+    } catch (err) {
+        return {};
+    }
+}
+
+type ModeratorPermission = "kick" | "ban" | "limit" | "lock" | "rename";
+
+const getBlockedUsers = () => parseUserIDList(Settings.plugins.VoiceCommands?.blockedUserIDs);
+const getModeratorUsers = () => parseUserAttributeList(Settings.plugins.VoiceCommands?.moderatorUserConfig);
+const setModeratorUsers = (moderatorUserConfig: UserAttributeList) => Settings.plugins.VoiceCommands.moderatorUserConfig = JSON.stringify(moderatorUserConfig);
 
 function blockUser(userId: string) {
     const blockedUsers = getBlockedUsers();
@@ -88,6 +150,35 @@ function unblockUser(userId: string) {
     if (blockedUserIndex === -1) return; // User not blocked
     blockedUsers.splice(blockedUserIndex, 1);
     Settings.plugins.VoiceCommands.blockedUserIDs = blockedUsers.join(",");
+}
+
+function userHasPermission(userId: string, permission: ModeratorPermission) {
+    const moderatorUsers = getModeratorUsers();
+    const userPermissions = moderatorUsers[userId];
+    return userPermissions && userPermissions.includes(permission);
+}
+
+function userAddPermission(userId: string, permission: ModeratorPermission) {
+    const moderatorUsers = getModeratorUsers();
+    if (!moderatorUsers[userId]) moderatorUsers[userId] = [];
+    moderatorUsers[userId].push(permission);
+    setModeratorUsers(moderatorUsers);
+}
+
+function userRemovePermission(userId: string, permission: ModeratorPermission) {
+    const moderatorUsers = getModeratorUsers();
+    if (!moderatorUsers[userId]) return;
+    moderatorUsers[userId] = moderatorUsers[userId].filter(x => x !== permission);
+    if (moderatorUsers[userId].length === 0) delete moderatorUsers[userId]; // Clear the entire object if no permissions remain
+    setModeratorUsers(moderatorUsers);
+}
+
+function userTogglePermission(userId: string, permission: ModeratorPermission) {
+    const moderatorUsers = getModeratorUsers();
+    if (!userHasPermission(userId, permission))
+        userAddPermission(userId, permission);
+    else
+        userRemovePermission(userId, permission);
 }
 
 const onVoiceStateUpdates = ({ voiceStates }: { voiceStates: VoiceState[]; }) => {
@@ -112,6 +203,55 @@ const onVoiceStateUpdates = ({ voiceStates }: { voiceStates: VoiceState[]; }) =>
     }
 };
 
+const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic: boolean; }) => {
+    if (optimistic) return;
+    const channel = ChannelStore.getChannel(message.channel_id);
+
+    const me = UserStore.getCurrentUser();
+
+    // Get our current voice state of the selected user
+    const userVoiceState = VoiceStateStore.getVoiceStateForUser(me.id);
+    if (!userVoiceState) return;
+
+    if (channel.type !== 2) return; // Not a voice channel
+    if (channel.id !== userVoiceState.channelId) return; // Not our voice channel
+    const userModeratorPermissions = getModeratorUsers()[message.author.id];
+    if (!userModeratorPermissions) return; // Sender is not a moderator
+
+    const messageParts = message.content
+        .substring(1) // Remove prefix (! / .)
+        .replace("voice-", "")
+        .split(" "); // Split at space, i.e. "ban @<1234567890>" -> [voice-ban, @<1234567890>]
+
+    if (messageParts.length < 1 || messageParts.length > 2) return; // Message has too few or too many parts
+
+    const command = messageParts[0];
+    let permissionName = command;
+    if (command === "unban") permissionName = "ban"; // Shitty hack
+    if (command === "unlock") permissionName = "lock"; // Shitty hack
+    if (!userModeratorPermissions.includes(permissionName)) return; // No permissions for command
+
+    if (["ban", "unban", "kick", "limit", "rename"].includes(command))
+        if (messageParts.length < 2) return; // Command argument missing
+
+    const commandArg = messageParts[1];
+
+    // User tag is invalid
+    if (["ban", "unban", "kick"].includes(command)) {
+        const userId = commandArg.replace(">", "").replace("<@", "");
+        if (userId === commandArg) return; // No tags were present in the first place
+        if (isNaN(parseInt(userId))) return; // User ID is not a valid number
+    }
+
+    // Limit argument is not a valid number
+    if (command === "limit" && isNaN(parseInt(commandArg))) return;
+
+    // Channel name argument is too short or too long
+    if (command === "rename" && commandArg.length < 1 || commandArg.length > 99) return;
+
+    sendMessage(channel.id, message.content);
+};
+
 const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: UserContextProps) => {
     if (!user || user.id === UserStore.getCurrentUser().id) return;
 
@@ -122,6 +262,7 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
     // Get voice state of the selected user
     const userVoiceState = VoiceStateStore.getVoiceStateForUser(user.id);
     if (!userVoiceState) return;
+    const selectedUserId = userVoiceState.userId;
 
     // Check if the selected user is in the same channel as us
     if (userVoiceState.channelId !== voiceChannelId) return;
@@ -131,7 +272,7 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
             <Menu.MenuItem
                 id="vc-kick-user"
                 label="Kick user"
-                action={() => sendMessage(voiceChannelId, `!voice-kick <@${userVoiceState.userId}>`)}
+                action={() => sendMessage(voiceChannelId, `!voice-kick <@${selectedUserId}>`)}
             />
         );
 
@@ -140,7 +281,7 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
             <Menu.MenuItem
                 id="vc-ban-user"
                 label="Ban user"
-                action={() => sendMessage(voiceChannelId, `!voice-ban <@${userVoiceState.userId}>`)}
+                action={() => sendMessage(voiceChannelId, `!voice-ban <@${selectedUserId}>`)}
             />
         );
 
@@ -149,7 +290,7 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
             <Menu.MenuItem
                 id="vc-unban-user"
                 label="Unban user"
-                action={() => sendMessage(voiceChannelId, `!voice-unban <@${userVoiceState.userId}>`)}
+                action={() => sendMessage(voiceChannelId, `!voice-unban <@${selectedUserId}>`)}
             />
         );
 
@@ -176,9 +317,50 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
             <Menu.MenuItem
                 id="vc-transfer"
                 label="Transfer voice channel"
-                action={() => sendMessage(voiceChannelId, `!voice-transfer <@${userVoiceState.userId}>`)}
+                action={() => sendMessage(voiceChannelId, `!voice-transfer <@${selectedUserId}>`)}
             />
         );
+
+    if (settings.store.voiceModeration) {
+        children.push(
+            <Menu.MenuItem
+                id="vc-user-permissions"
+                label="Permissions"
+            >
+                <Menu.MenuItem
+                    id="vc-user-perm-ban"
+                    label="Ban/unban users"
+                    action={() => userTogglePermission(selectedUserId, "ban")}
+                    icon={userHasPermission(selectedUserId, "ban") ? CheckmarkIcon : EmptyIcon}
+                />
+                <Menu.MenuItem
+                    id="vc-user-perm-kick"
+                    label="Kick users"
+                    action={() => userTogglePermission(selectedUserId, "kick")}
+                    icon={userHasPermission(selectedUserId, "kick") ? CheckmarkIcon : EmptyIcon}
+                />
+                <Menu.MenuItem
+                    id="vc-user-perm-limit"
+                    label="Limit the channel"
+                    action={() => userTogglePermission(selectedUserId, "limit")}
+                    icon={userHasPermission(selectedUserId, "limit") ? CheckmarkIcon : EmptyIcon}
+                />
+                <Menu.MenuItem
+                    id="vc-user-perm-lock"
+                    label="Lock/unlock the channel"
+                    action={() => userTogglePermission(selectedUserId, "lock")}
+                    icon={userHasPermission(selectedUserId, "lock") ? CheckmarkIcon : EmptyIcon}
+                />
+                <Menu.MenuItem
+                    id="vc-user-perm-rename"
+                    label="Rename the channel"
+                    action={() => userTogglePermission(selectedUserId, "rename")}
+                    icon={userHasPermission(selectedUserId, "rename") ? CheckmarkIcon : EmptyIcon}
+                />
+            </Menu.MenuItem>
+        );
+    }
+
 };
 
 const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channel }: ChannelContextProps) => {
@@ -203,7 +385,7 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
             <Menu.MenuItem
                 id="vc-change-limit-0"
                 label="No limit"
-                action={() => sendMessage(channel.id, `!voice-limit 0`)}
+                action={() => sendMessage(channel.id, "!voice-limit 0")}
             />
         );
 
@@ -424,6 +606,11 @@ const settings = definePluginSettings({
         description: "Add !voice-transfer shortcut to user context menus",
         default: true
     },
+    voiceModeration: {
+        type: OptionType.BOOLEAN,
+        description: "Add context menu options to assign moderation permissions",
+        default: true
+    },
     voiceLimit: {
         type: OptionType.BOOLEAN,
         description: "Add !voice-limit shortcut to channel context menus",
@@ -468,6 +655,11 @@ const settings = definePluginSettings({
         type: OptionType.STRING,
         description: "IDs of blocked users (comma-separated)",
         default: ""
+    },
+    moderatorUserConfig: {
+        type: OptionType.STRING,
+        description: "Moderator configuration (format: {\"<user id>\": [\"kick\", \"ban\", \"limit\", \"lock\", \"rename\"]})",
+        default: "{}"
     }
 });
 
@@ -476,7 +668,8 @@ export default definePlugin({
     description: "Adds context menu options for managing voice channels (!voice-kick, !voice-lock ...)",
     authors: [{ name: "aequabit", id: 934357855853748264n }],
     flux: {
-        VOICE_STATE_UPDATES: onVoiceStateUpdates
+        VOICE_STATE_UPDATES: onVoiceStateUpdates,
+        MESSAGE_CREATE: onMessageCreate
     },
     settings,
     contextMenus: {
