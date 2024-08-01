@@ -17,6 +17,7 @@
 */
 
 import { NavContextMenuPatchCallback } from "@api/ContextMenu";
+import { showNotification } from "@api/Notifications";
 import { definePluginSettings, Settings } from "@api/Settings";
 import { classNameFactory } from "@api/Styles";
 import { classes } from "@utils/misc";
@@ -112,29 +113,31 @@ function sendMessage(channelId: string, content: string) {
     });
 }
 
-function parseUserIDList(userIDList: string): string[] {
+let _notifyAbort = false;
+export function notify(text: string, icon?: string, onClick?: () => void) {
+    // Trash
+    if (_notifyAbort) return;
+    _notifyAbort = true;
+    setTimeout(() => _notifyAbort = false, 2500);
+
+    showNotification({
+        title: "VoiceCommands",
+        body: text,
+        icon,
+        onClick
+    });
+}
+
+function getBlockedUsers(): string[] {
+    const blockedUserIDs = Settings.plugins.VoiceCommands?.blockedUserIDs || "";
+
     // Hope this helps
-    return userIDList
+    return blockedUserIDs
         .trim()
         .split(",")
         .map(x => x.trim())
         .filter(x => x.length > 0);
 }
-
-interface UserAttributeList { [key: string]: string[]; }
-function parseUserAttributeList(userAttributeList: string): UserAttributeList {
-    try {
-        return JSON.parse(userAttributeList);
-    } catch (err) {
-        return {};
-    }
-}
-
-type ModeratorPermission = "kick" | "ban" | "limit" | "lock" | "rename";
-
-const getBlockedUsers = () => parseUserIDList(Settings.plugins.VoiceCommands?.blockedUserIDs);
-const getModeratorUsers = () => parseUserAttributeList(Settings.plugins.VoiceCommands?.moderatorUserConfig);
-const setModeratorUsers = (moderatorUserConfig: UserAttributeList) => Settings.plugins.VoiceCommands.moderatorUserConfig = JSON.stringify(moderatorUserConfig);
 
 function blockUser(userId: string) {
     const blockedUsers = getBlockedUsers();
@@ -151,20 +154,40 @@ function unblockUser(userId: string) {
     Settings.plugins.VoiceCommands.blockedUserIDs = blockedUsers.join(",");
 }
 
-function userHasPermission(userId: string, permission: ModeratorPermission) {
+type UserModerationPermission = "kick" | "ban" | "limit" | "lock" | "rename";
+interface UserAttributeList { [key: string]: UserModerationPermission[]; }
+function getModeratorUsers(): UserAttributeList {
+    const moderatorUserConfig = Settings.plugins.VoiceCommands?.moderatorUserConfig || "";
+    if (moderatorUserConfig === "") {
+        Settings.plugins.VoiceCommands.moderatorUserConfig = "{}";
+        notify("The moderator permission configuration has been reset.");
+    }
+
+    try {
+        return JSON.parse(Settings.plugins.VoiceCommands?.moderatorUserConfig);
+    } catch (err) {
+        notify("Failed to parse moderator permissions: " + (err as Error).message);
+        return {};
+    }
+}
+
+const setModeratorUsers = (moderatorUserConfig: UserAttributeList) => Settings.plugins.VoiceCommands.moderatorUserConfig = JSON.stringify(moderatorUserConfig);
+
+
+function userHasPermission(userId: string, permission: UserModerationPermission) {
     const moderatorUsers = getModeratorUsers();
     const userPermissions = moderatorUsers[userId];
     return userPermissions && userPermissions.includes(permission);
 }
 
-function userAddPermission(userId: string, permission: ModeratorPermission) {
+function userAddPermission(userId: string, permission: UserModerationPermission) {
     const moderatorUsers = getModeratorUsers();
     if (!moderatorUsers[userId]) moderatorUsers[userId] = [];
     moderatorUsers[userId].push(permission);
     setModeratorUsers(moderatorUsers);
 }
 
-function userRemovePermission(userId: string, permission: ModeratorPermission) {
+function userRemovePermission(userId: string, permission: UserModerationPermission) {
     const moderatorUsers = getModeratorUsers();
     if (!moderatorUsers[userId]) return;
     moderatorUsers[userId] = moderatorUsers[userId].filter(x => x !== permission);
@@ -172,7 +195,7 @@ function userRemovePermission(userId: string, permission: ModeratorPermission) {
     setModeratorUsers(moderatorUsers);
 }
 
-function userTogglePermission(userId: string, permission: ModeratorPermission) {
+function userTogglePermission(userId: string, permission: UserModerationPermission) {
     const moderatorUsers = getModeratorUsers();
     if (!userHasPermission(userId, permission))
         userAddPermission(userId, permission);
@@ -228,7 +251,7 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
     let permissionName = command;
     if (command === "unban") permissionName = "ban"; // Shitty hack
     if (command === "unlock") permissionName = "lock"; // Shitty hack
-    if (!userModeratorPermissions.includes(permissionName)) return; // No permissions for command
+    if (!userModeratorPermissions.includes(permissionName as UserModerationPermission)) return; // No permissions for command
 
     if (["ban", "unban", "kick", "limit", "rename"].includes(command))
         if (messageParts.length < 2) return; // Command argument missing
