@@ -19,7 +19,6 @@
 import { NavContextMenuPatchCallback } from "@api/ContextMenu";
 import { definePluginSettings, Settings } from "@api/Settings";
 import { classNameFactory } from "@api/Styles";
-import { Icon } from "@components/Icons";
 import { classes } from "@utils/misc";
 import { ModalContent, ModalFooter, ModalHeader, ModalProps, ModalRoot, openModalLazy } from "@utils/modal";
 import definePlugin, { OptionType } from "@utils/types";
@@ -257,40 +256,37 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
 
     // Get our current voice channel
     const voiceChannelId = SelectedChannelStore.getVoiceChannelId();
-    if (!voiceChannelId) return;
+    const amInVoice = !!voiceChannelId;
 
     // Get voice state of the selected user
     const userVoiceState = VoiceStateStore.getVoiceStateForUser(user.id);
-    if (!userVoiceState) return;
-    const selectedUserId = userVoiceState.userId;
+    const userInVoice = !!userVoiceState;
+    const userInMyVoice = userInVoice && userVoiceState.channelId === voiceChannelId;
 
-    // Check if the selected user is in the same channel as us
-    if (userVoiceState.channelId !== voiceChannelId) return;
-
-    if (settings.store.voiceKick)
+    if (amInVoice && userInMyVoice && settings.store.voiceKick)
         children.push(
             <Menu.MenuItem
                 id="vc-kick-user"
                 label="Kick user"
-                action={() => sendMessage(voiceChannelId, `!voice-kick <@${selectedUserId}>`)}
+                action={() => sendMessage(voiceChannelId, `!voice-kick <@${user.id}>`)}
             />
         );
 
-    if (settings.store.voiceBan)
+    if (amInVoice && userInMyVoice && settings.store.voiceBan)
         children.push(
             <Menu.MenuItem
                 id="vc-ban-user"
                 label="Ban user"
-                action={() => sendMessage(voiceChannelId, `!voice-ban <@${selectedUserId}>`)}
+                action={() => sendMessage(voiceChannelId, `!voice-ban <@${user.id}>`)}
             />
         );
 
-    if (settings.store.voiceUnban)
+    if (amInVoice && settings.store.voiceUnban)
         children.push(
             <Menu.MenuItem
                 id="vc-unban-user"
                 label="Unban user"
-                action={() => sendMessage(voiceChannelId, `!voice-unban <@${selectedUserId}>`)}
+                action={() => sendMessage(voiceChannelId, `!voice-unban <@${user.id}>`)}
             />
         );
 
@@ -312,12 +308,12 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
             />
         );
 
-    if (settings.store.voiceTransfer)
+    if (amInVoice && userInMyVoice && settings.store.voiceTransfer)
         children.push(
             <Menu.MenuItem
                 id="vc-transfer"
                 label="Transfer voice channel"
-                action={() => sendMessage(voiceChannelId, `!voice-transfer <@${selectedUserId}>`)}
+                action={() => sendMessage(voiceChannelId, `!voice-transfer <@${user.id}>`)}
             />
         );
 
@@ -328,39 +324,38 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
                 label="Permissions"
             >
                 <Menu.MenuItem
-                    id="vc-user-perm-ban"
-                    label="Ban/unban users"
-                    action={() => userTogglePermission(selectedUserId, "ban")}
-                    icon={userHasPermission(selectedUserId, "ban") ? CheckmarkIcon : EmptyIcon}
-                />
-                <Menu.MenuItem
                     id="vc-user-perm-kick"
                     label="Kick users"
-                    action={() => userTogglePermission(selectedUserId, "kick")}
-                    icon={userHasPermission(selectedUserId, "kick") ? CheckmarkIcon : EmptyIcon}
+                    action={() => userTogglePermission(user.id, "kick")}
+                    icon={userHasPermission(user.id, "kick") ? CheckmarkIcon : EmptyIcon}
+                />
+                <Menu.MenuItem
+                    id="vc-user-perm-ban"
+                    label="Ban/unban users"
+                    action={() => userTogglePermission(user.id, "ban")}
+                    icon={userHasPermission(user.id, "ban") ? CheckmarkIcon : EmptyIcon}
                 />
                 <Menu.MenuItem
                     id="vc-user-perm-limit"
-                    label="Limit the channel"
-                    action={() => userTogglePermission(selectedUserId, "limit")}
-                    icon={userHasPermission(selectedUserId, "limit") ? CheckmarkIcon : EmptyIcon}
-                />
-                <Menu.MenuItem
-                    id="vc-user-perm-lock"
-                    label="Lock/unlock the channel"
-                    action={() => userTogglePermission(selectedUserId, "lock")}
-                    icon={userHasPermission(selectedUserId, "lock") ? CheckmarkIcon : EmptyIcon}
+                    label="Limit channel"
+                    action={() => userTogglePermission(user.id, "limit")}
+                    icon={userHasPermission(user.id, "limit") ? CheckmarkIcon : EmptyIcon}
                 />
                 <Menu.MenuItem
                     id="vc-user-perm-rename"
-                    label="Rename the channel"
-                    action={() => userTogglePermission(selectedUserId, "rename")}
-                    icon={userHasPermission(selectedUserId, "rename") ? CheckmarkIcon : EmptyIcon}
+                    label="Rename channel"
+                    action={() => userTogglePermission(user.id, "rename")}
+                    icon={userHasPermission(user.id, "rename") ? CheckmarkIcon : EmptyIcon}
+                />
+                <Menu.MenuItem
+                    id="vc-user-perm-lock"
+                    label="Lock/unlock channel"
+                    action={() => userTogglePermission(user.id, "lock")}
+                    icon={userHasPermission(user.id, "lock") ? CheckmarkIcon : EmptyIcon}
                 />
             </Menu.MenuItem>
         );
     }
-
 };
 
 const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channel }: ChannelContextProps) => {
