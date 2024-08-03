@@ -279,7 +279,7 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
         if (isNaN(parseInt(userId))) return; // User ID is not a valid number
 
         // Target is another moderator
-        if (Settings.plugins.VoiceCommands.voiceModeratorImmunity && userIsModerator(userId)) {
+        if (command !== "unban" && Settings.plugins.VoiceCommands.voiceModeratorImmunity && userIsModerator(userId)) {
             sendMessage(channel.id, "Cannot kick or ban other moderators", message.id);
             return;
         }
