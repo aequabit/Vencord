@@ -98,7 +98,7 @@ interface VoiceState {
     selfMute: boolean;
 }
 
-function sendMessage(channelId: string, content: string) {
+function sendMessage(channelId: string, content: string, messageReference?: string) {
     RestAPI.post({
         url: `/channels/${channelId}/messages`,
         body: {
@@ -108,7 +108,7 @@ function sendMessage(channelId: string, content: string) {
             sticker_ids: [],
             type: 0,
             attachments: [],
-            message_reference: null,
+            message_reference: messageReference ? { message_id: messageReference } : null,
         }
     });
 }
@@ -154,7 +154,7 @@ function unblockUser(userId: string) {
     Settings.plugins.VoiceCommands.blockedUserIDs = blockedUsers.join(",");
 }
 
-type UserModerationPermission = "kick" | "ban" | "limit" | "lock" | "rename";
+type UserModerationPermission = "kick" | "ban" | "limit" | "lock" | "rename" | "immunity";
 interface UserAttributeList { [key: string]: UserModerationPermission[]; }
 function getModeratorUsers(): UserAttributeList {
     const moderatorUserConfig = Settings.plugins.VoiceCommands?.moderatorUserConfig || "";
@@ -173,6 +173,7 @@ function getModeratorUsers(): UserAttributeList {
 
 const setModeratorUsers = (moderatorUserConfig: UserAttributeList) => Settings.plugins.VoiceCommands.moderatorUserConfig = JSON.stringify(moderatorUserConfig);
 
+const userIsModerator = (userId: string) => getModeratorUsers()[userId] !== undefined;
 
 function userHasPermission(userId: string, permission: UserModerationPermission) {
     const moderatorUsers = getModeratorUsers();
@@ -263,6 +264,12 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
         const userId = commandArg.replace(">", "").replace("<@", "");
         if (userId === commandArg) return; // No tags were present in the first place
         if (isNaN(parseInt(userId))) return; // User ID is not a valid number
+
+        // Target is another moderator
+        if (Settings.plugins.VoiceCommands.voiceModeratorImmunity && userIsModerator(userId)) {
+            sendMessage(channel.id, "Cannot kick or ban other moderators", message.id);
+            return;
+        }
     }
 
     // Limit argument is not a valid number
@@ -375,6 +382,12 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
                     label="Lock/unlock channel"
                     action={() => userTogglePermission(user.id, "lock")}
                     icon={userHasPermission(user.id, "lock") ? CheckmarkIcon : EmptyIcon}
+                />
+                <Menu.MenuItem
+                    id="vc-user-perm-immunity"
+                    label="Immune to kicks/bans"
+                    action={() => userTogglePermission(user.id, "immunity")}
+                    icon={userHasPermission(user.id, "immunity") ? CheckmarkIcon : EmptyIcon}
                 />
             </Menu.MenuItem>
         );
@@ -627,6 +640,11 @@ const settings = definePluginSettings({
     voiceModeration: {
         type: OptionType.BOOLEAN,
         description: "Add context menu options to assign moderation permissions",
+        default: true
+    },
+    voiceModeratorImmunity: {
+        type: OptionType.BOOLEAN,
+        description: "Whether to make users with at least one moderation permission immune to kicks and bans by other moderators",
         default: true
     },
     voiceLimit: {
