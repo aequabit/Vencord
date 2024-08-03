@@ -239,6 +239,16 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
     if (channel.type !== 2) return; // Not a voice channel
     if (channel.id !== userVoiceState.channelId) return; // Not our voice channel
     const userModeratorPermissions = getModeratorUsers()[message.author.id];
+
+    if (message.content.startsWith(".permissions")) {
+        if (!userModeratorPermissions)
+            sendMessage(channel.id, "You are not a moderator", message.id);
+        else
+            sendMessage(channel.id, `Your permissions: ${userModeratorPermissions.join(", ")}`, message.id);
+
+        return;
+    }
+
     if (!userModeratorPermissions) return; // Sender is not a moderator
 
     const messageParts = message.content
