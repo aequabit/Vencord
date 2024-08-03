@@ -232,6 +232,9 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
 
     const me = UserStore.getCurrentUser();
 
+    // Message was sent by us
+    if (message.author.id === me.id) return;
+
     // Get our current voice state of the selected user
     const userVoiceState = VoiceStateStore.getVoiceStateForUser(me.id);
     if (!userVoiceState) return;
