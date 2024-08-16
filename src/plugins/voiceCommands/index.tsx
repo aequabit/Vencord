@@ -17,15 +17,17 @@
 */
 
 import { NavContextMenuPatchCallback } from "@api/ContextMenu";
+import { MessageDecorations } from "@api/index";
 import { showNotification } from "@api/Notifications";
 import { definePluginSettings, Settings } from "@api/Settings";
 import { classNameFactory } from "@api/Styles";
 import { classes } from "@utils/misc";
-import { ModalContent, ModalFooter, ModalHeader, ModalProps, ModalRoot, openModalLazy } from "@utils/modal";
+import { ModalContent, ModalFooter, ModalHeader, ModalProps, ModalRoot, ModalSize, openModalLazy } from "@utils/modal";
 import definePlugin, { OptionType } from "@utils/types";
-import { findLazy, findStoreLazy } from "@webpack";
-import { Button, ChannelStore, Forms, Menu, RestAPI, SelectedChannelStore, SnowflakeUtils, Text, TextInput, UserStore } from "@webpack/common";
-import type { Channel, Message, User } from "discord-types/general";
+import { findByCodeLazy, findByPropsLazy, findComponentByCodeLazy, findLazy, findStoreLazy } from "@webpack";
+import { Button, ChannelStore, Clickable, Clipboard, ContextMenuApi, Forms, Menu, MessageActions, MessageCache, MessageStore, RestAPI, ScrollerThin, SelectedChannelStore, SnowflakeUtils, Text, TextInput, Timestamp, Toasts, UserStore } from "@webpack/common";
+import { Channel, Message, User } from "discord-types/general";
+import messageDecorations from "plugins/_api/messageDecorations";
 import { PropsWithChildren } from "react";
 
 type IconProps = JSX.IntrinsicElements["svg"];
@@ -44,6 +46,36 @@ function Icon({ height = 24, width = 24, className, children, viewBox, ...svgPro
         >
             {children}
         </svg>
+    );
+}
+
+function UserWaveIcon({ height = 24, width = 24, className }: IconProps) {
+    return (
+        <Icon
+            height={height}
+            width={width}
+            className={classes(className, "vc-user-wave-icon")}
+            viewBox="0 0 24 24"
+        >
+            <g fill="none" fill-rule="evenodd">
+                <path fill="white" d="M13 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"></path><path fill="white" d="M3 5v-.75C3 3.56 3.56 3 4.25 3s1.24.56 1.33 1.25C6.12 8.65 9.46 12 13 12h1a8 8 0 0 1 8 8 2 2 0 0 1-2 2 .21.21 0 0 1-.2-.15 7.65 7.65 0 0 0-1.32-2.3c-.15-.2-.42-.06-.39.17l.25 2c.02.15-.1.28-.25.28H9a2 2 0 0 1-2-2v-2.22c0-1.57-.67-3.05-1.53-4.37A15.85 15.85 0 0 1 3 5Z"></path>
+            </g>
+        </Icon>
+    );
+}
+
+function CallHangupIcon({ height = 24, width = 24, className }: IconProps) {
+    return (
+        <Icon
+            height={height}
+            width={width}
+            className={classes(className, "vc-user-wave-icon")}
+            viewBox="0 0 24 24"
+        >
+            <g fill="none" fill-rule="evenodd">
+                <defs><clipPath id="__lottie_element_151"><rect width={width} height={height} x="0" y="0"></rect></clipPath><clipPath id="__lottie_element_153"><path d="M0,0 L600,0 L600,600 L0,600z"></path></clipPath></defs><g clip-path="url(#__lottie_element_151)"><g clip-path="url(#__lottie_element_153)" transform="matrix(0.03999999910593033,0,0,0.03999999910593033,0,0)" opacity="1" style={{ display: "block" }}><g transform="matrix(25,0,0,25,300,315)" opacity="1" style={{ display: "block" }}><g opacity="1" transform="matrix(1,0,0,1,0,-0.6100000143051147)"><path fill="white" fill-opacity="1" d=" M9.335000038146973,-1.8179999589920044 C4.184999942779541,-6.9670000076293945 -4.164000034332275,-6.9670000076293945 -9.312999725341797,-1.8179999589920044 C-11.690999984741211,0.5609999895095825 -11.35099983215332,3.6040000915527344 -9.555999755859375,5.39900016784668 C-9.300999641418457,5.6539998054504395 -8.909000396728516,5.7129998207092285 -8.59000015258789,5.544000148773193 C-8.59000015258789,5.544000148773193 -4.269999980926514,3.256999969482422 -4.269999980926514,3.256999969482422 C-3.871000051498413,3.0460000038146973 -3.683000087738037,2.5769999027252197 -3.8259999752044678,2.1489999294281006 C-3.8259999752044678,2.1489999294281006 -4.558000087738037,-0.04600000008940697 -4.558000087738037,-0.04600000008940697 C-1.8250000476837158,-1.9980000257492065 1.8459999561309814,-1.9980000257492065 4.578999996185303,-0.04600000008940697 C4.578999996185303,-0.04600000008940697 3.815000057220459,2.757999897003174 3.815000057220459,2.757999897003174 C3.693000078201294,3.2070000171661377 3.9240000247955322,3.677000045776367 4.354000091552734,3.8540000915527344 C4.354000091552734,3.8540000915527344 8.63599967956543,5.617000102996826 8.63599967956543,5.617000102996826 C8.946000099182129,5.744999885559082 9.303000450134277,5.672999858856201 9.539999961853027,5.435999870300293 C11.331999778747559,3.6440000534057617 11.708999633789062,0.5559999942779541 9.335000038146973,-1.8179999589920044z"></path></g></g></g></g>
+            </g>
+        </Icon >
     );
 }
 
@@ -111,6 +143,40 @@ function sendMessage(channelId: string, content: string, messageReference?: stri
             message_reference: messageReference ? { message_id: messageReference } : null,
         }
     });
+}
+
+function _sendMessage(channelId: string, content: string, messageReference?: string) {
+    const msg = {
+        content,
+        tts: false,
+        invalidEmojis: [],
+        validNonShortcutEmojis: []
+    };
+
+    MessageActions._sendMessage(channelId, msg);
+}
+
+const zentrumBotId = "1110336525176164452";
+
+function getChannelMessages(channelId: string) {
+    const channelMessages = MessageStore.getMessages(channelId);
+    console.log("CHANNEL MESSAGES: ", channelMessages);
+    if (!channelMessages || !channelMessages.toArray) return;
+    console.log("CHECK:", channelMessages, channelMessages.toArray !== undefined);
+
+    for (const message of channelMessages.toArray()) {
+        if (!message.author || !message.author.id) continue;
+
+        // TODO: Don't do this
+        if (message.author.id !== zentrumBotId) return;
+
+        console.log("BOT MESSAGE:", message);
+
+        // @Gesocksbeseitigungsminister, du hast @Miri Egirl aus dem temporären Sprachkanal gekickt.
+        // if (!message.)
+    }
+
+    // console.log(MessageCache._channelMessages);
 }
 
 let _notifyAbort = false;
@@ -204,8 +270,81 @@ function userTogglePermission(userId: string, permission: UserModerationPermissi
         userRemovePermission(userId, permission);
 }
 
+const channelOwners = new Map<string, string>();
+
+function isChannelOwner(channelId: string, userId: string): boolean {
+    if (!channelOwners.has(channelId)) return false; // No owner set for channel
+    if (channelOwners.get(channelId) !== userId) return false; // User is not the owner
+    return true;
+}
+
+function setChannelOwner(channelId: string, userId: string) {
+    channelOwners[channelId] = userId;
+}
+
+function determineChannelOwner(channelId: string): string | null {
+    const channel = ChannelStore.getChannel(channelId);
+    if (!channel) return null;
+
+    const channelMessages = MessageStore.getMessages(channelId);
+    if (!channelMessages) return null;
+
+    // console.log("CHANNEL MESSAGES:", channelMessages);
+
+    return "";
+}
+
+type VoiceChannelEvent = { type: "join" | "leave"; at: number; userId: string; };
+type VoiceChannelEventLog = { [channelId: string]: VoiceChannelEvent[]; };
+let voiceChannelEvents: VoiceChannelEventLog = {};
+
+type UserVoiceStateLog = { [userId: string]: (string | undefined)[]; };
+let userVoiceStateLog: UserVoiceStateLog = {};
+
+let startTime: number | undefined = undefined;
+
 const onVoiceStateUpdates = ({ voiceStates }: { voiceStates: VoiceState[]; }) => {
     const me = UserStore.getCurrentUser();
+
+    // Event logging
+    for (const state of voiceStates) {
+        const { userId, channelId, oldChannelId } = state;
+
+        // TÖRÖÖÖÖÖÖÖÖ
+        // if (userId !== "1157043198833733692") continue;
+
+        // Log user channel join
+        if (!userVoiceStateLog[userId]) userVoiceStateLog[userId] = [];
+        userVoiceStateLog[userId].push(channelId);
+
+        const voiceStateLog = userVoiceStateLog[userId];
+
+        // For some reason oldChannelId is always the same as channelId when switching from one channel to another
+        let realOldChannelId: string | undefined = undefined;
+        if (voiceStateLog.length > 1) {
+            realOldChannelId = voiceStateLog[voiceStateLog.length - 2];
+        }
+
+        const _user = UserStore.getUser(userId).username;
+        const _channel = channelId ? ChannelStore.getChannel(channelId).name : "<null>";
+        const _oldChannel = realOldChannelId ? ChannelStore.getChannel(realOldChannelId).name : "<null>";
+        // console.log(`USER=${_user} CHANNEL=${_channel} OLDCHANNEL=${_oldChannel}`);
+
+        if (realOldChannelId !== undefined) {
+            if (!voiceChannelEvents[realOldChannelId])
+                voiceChannelEvents[realOldChannelId] = [];
+
+            voiceChannelEvents[realOldChannelId].push({ type: "leave", at: Date.now(), userId });
+        }
+
+        if (channelId !== undefined) {
+            if (!voiceChannelEvents[channelId])
+                voiceChannelEvents[channelId] = [];
+
+            voiceChannelEvents[channelId].push({ type: "join", at: Date.now(), userId });
+        }
+    }
+
 
     // Get our current voice state of the selected user
     const userVoiceState = VoiceStateStore.getVoiceStateForUser(me.id);
@@ -213,34 +352,71 @@ const onVoiceStateUpdates = ({ voiceStates }: { voiceStates: VoiceState[]; }) =>
 
     const voiceChannelId = userVoiceState.channelId;
 
-    // Ignore Stage Channels
-    if (ChannelStore.getChannel(voiceChannelId)?.type === 13) return;
+    // Get voice channel
+    const channel = ChannelStore.getChannel(voiceChannelId);
+    if (!channel) return;
 
+    if (channel.type === 13) return; // Ignore Stage Channels
+
+    //determineChannelOwner(channel.id);
+
+    // Blocklist check
     for (const state of voiceStates) {
         const { userId, channelId, oldChannelId } = state;
-        if (userId === me.id) continue; // It's us
-        if (channelId !== voiceChannelId) continue; // User is not in our channel
-        if (!getBlockedUsers().includes(userId)) continue; // User isn't blocked
 
-        sendMessage(voiceChannelId, `!voice-ban <@${userId}>`);
+        const userInChannel = channelId !== undefined;
+        const userOldChannel = channelId !== undefined;
+
+        if (channelId !== voiceChannelId) continue; // User is not in our channel
+
+        // It's us
+        if (userId === me.id) {
+            if (!oldChannelId) continue;
+            const oldChannel = ChannelStore.getChannel(oldChannelId);
+            if (!oldChannel) continue;
+            // TODO: Don't hardcode this
+            const oldChannelIsLobby = oldChannel.name.includes("Voice erstellen") || oldChannel.name.includes("Kanal erstellen");
+            if (!oldChannelIsLobby) continue;
+            type UserEx = User & { globalName: string; };
+            if (channel.name === `${(me as UserEx).globalName}'s Channel` ||
+                channel.name === `${(me as UserEx).globalName}s Kanal` ||
+                channel.name === `${me.username}'s Channel` ||
+                channel.name === `${me.username}s Kanal`
+            ) {
+                setChannelOwner(channel.id, me.id);
+
+                console.log("CHANNEL CREATED: " + channel.name);
+            }
+        }
+
+        // User is blocked
+        if (getBlockedUsers().includes(userId)) {
+            sendMessage(voiceChannelId, `!voice-ban <@${userId}>`);
+        }
     }
 };
 
 const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic: boolean; }) => {
-    if (optimistic) return;
+    //if (optimistic) return;
     const channel = ChannelStore.getChannel(message.channel_id);
 
     const me = UserStore.getCurrentUser();
-
-    // Message was sent by us
-    if (message.author.id === me.id) return;
 
     // Get our current voice state of the selected user
     const userVoiceState = VoiceStateStore.getVoiceStateForUser(me.id);
     if (!userVoiceState) return;
 
     if (channel.type !== 2) return; // Not a voice channel
+
     if (channel.id !== userVoiceState.channelId) return; // Not our voice channel
+
+    if (message.content.startsWith(".msg")) {
+        getChannelMessages(channel.id);
+        return;
+    }
+
+    if (message.author.id === me.id) return; // Message was sent by us
+
     const userModeratorPermissions = getModeratorUsers()[message.author.id];
 
     if (message.content.startsWith(".permissions")) {
@@ -423,6 +599,16 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
     // No voice channel or not the current one
     if (!voiceChannelId || userVoiceState.channelId !== voiceChannelId) return;
 
+    if (true/*settings.store.voiceLimit*/) {
+        children.push(
+            <Menu.MenuItem
+                id="vc-user-log"
+                label="Event log"
+                action={() => openVoiceChannelEventsModal(voiceChannelId)}
+            />
+        );
+    }
+
     if (settings.store.voiceLimit) {
         const userLimitOptionElements: JSX.Element[] = [];
         userLimitOptionElements.push(
@@ -552,6 +738,121 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
         );
 };
 
+interface VoiceChannelEventsModalProps {
+    modalProps: ModalProps;
+    voiceChannelId: string;
+}
+
+const UserSummaryItem = findComponentByCodeLazy("defaultRenderUser", "showDefaultAvatarsForNullUsers");
+const UserPopoutSection = findByCodeLazy(".lastSection", "children:");
+const AvatarStyles = findByPropsLazy("moreUsers", "emptyUser", "avatarContainer", "clickableAvatar");
+
+export function VoiceChannelEventsModal({ modalProps, voiceChannelId }: VoiceChannelEventsModalProps) {
+    const channel = ChannelStore.getChannel(voiceChannelId);
+    if (!channel) return null;
+
+    const getUsername = (userId: string) => {
+        const user = UserStore.getUser(userId);
+        return user ? user.username : "<unknown>";
+    };
+
+    const copyUserName = (userId: string) => {
+        const username = getUsername(userId);
+        Clipboard.copy(username);
+        Toasts.show({
+            id: Toasts.genId(),
+            message: "Copied username to clipboard: " + username,
+            type: Toasts.Type.MESSAGE,
+            options: {
+                position: Toasts.Position.BOTTOM,
+                duration: 1800
+            }
+        });
+    };
+
+    const createListItem = (ev: VoiceChannelEvent) => {
+        const user = UserStore.getUser(ev.userId);
+
+        // TODO: Check fo user existence (add placeholder if undefined)
+        // TODO: Use user context menu instead of onClick copy handler
+        return (
+            <div className="auditLog_eebd33 row_cfe282" style={{ marginBottom: "8px" }} onClick={() => copyUserName(user.id)}>
+                <div className="headerClickable_eebd33 header_eebd33" style={{ width: "auto" }} aria-expanded="false" role="listitem" tabIndex={-1}>
+                    {ev.type === "join" ? <UserWaveIcon /> : <CallHangupIcon />}
+                    {/* <div className="icon_eebd33 typeCreate_eebd33 targetInvite_eebd33"></div> */}
+                    <div className="wrapper_c51b4e pointer_c51b4e avatar_eebd33" tabIndex={0} aria-hidden="true" role="button" style={{ width: "25px", height: "25px" }}>
+                        <svg width="25" height="25" viewBox="0 0 25 25" className="mask_c51b4e svg_c51b4e" aria-hidden="true">
+                            <foreignObject x="0" y="0" width="25" height="25" mask="url(#svg-mask-avatar-default)">
+                                <div className="avatarStack_c51b4e">
+                                    <img src={user.getAvatarURL(channel.getGuildId())} alt=" " className="avatar_c51b4e" aria-hidden="true" />
+                                </div>
+                            </foreignObject>
+                        </svg>
+                        {/* <UserSummaryItem
+                            users={[UserStore.getUser("1157043198833733692")]}
+                            count={1}
+                            guildId={channel.getGuildId()}
+                            renderIcon={false}
+                            site={40}
+                            showDefaultAvatarsForNullUsers
+                            showUserPopout
+                            renderUser={(_user: User) => (
+                                <Clickable className={AvatarStyles.clickableAvatar}>
+                                    <img
+                                        className={AvatarStyles.avatar}
+                                        src={user.getAvatarURL(void 0, 80, true)}
+                                        alt={user.username}
+                                        title={user.username}
+                                    />
+                                </Clickable>
+                            )}
+                        /> */}
+                    </div>
+                    <div className="timeWrap_eebd33">
+                        <div className="title_eebd33">
+                            <div className="overflowEllipsis_eebd33">
+                                <span className="userHook_eebd33">
+                                    <div className="defaultColor_a595eb text-md/normal_dc00ef" data-text-variant="text-md/normal">{user.username}</div>
+                                </span> {ev.type === "join" ? "joined" : "left"}
+                            </div>
+                        </div>
+                        <div className="defaultColor_a595eb text-sm/normal_dc00ef timestamp_eebd33" data-text-variant="text-sm/normal">
+                            {
+                                (startTime && ((ev.at - startTime) < 4000)) // TODO: Shit (try to not show timestamps for old events)
+                                    ? null
+                                    : (
+                                        <Timestamp
+                                            className={cl("timestamp")}
+                                            timestamp={new Date(ev.at)}
+                                            isEdited={true}
+                                            isInline={false}
+                                        />
+                                    )
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <ModalRoot {...modalProps} size={ModalSize.DYNAMIC}>
+            <ModalHeader>
+                <Text variant="heading-lg/semibold" style={{ flexGrow: 1 }}>Event log: {channel.name}</Text>
+            </ModalHeader>
+
+            <ModalContent className={cl("content")}>
+                <Forms.FormSection>
+                    <div style={{ minWidth: "480px" }} role="list" tabIndex={0} data-list-id="audit-log">
+                        {voiceChannelEvents[voiceChannelId].reverse().map(ev => createListItem(ev))}
+                    </div>
+                </Forms.FormSection>
+            </ModalContent>
+        </ModalRoot >
+    );
+};
+
 interface TextInputModalProps {
     modalProps: ModalProps;
     modalHeading: string;
@@ -596,6 +897,14 @@ export function TextInputModal({ modalProps, modalHeading, inputLabel, submitBut
         </ModalRoot>
     );
 }
+
+export const openVoiceChannelEventsModal = (voiceChannelId: string) =>
+    openModalLazy(async () => {
+        return modalProps => <VoiceChannelEventsModal
+            modalProps={modalProps}
+            voiceChannelId={voiceChannelId}
+        />;
+    });
 
 export const openChannelNameChangeModal = () =>
     openModalLazy(async () => {
@@ -724,5 +1033,8 @@ export default definePlugin({
     contextMenus: {
         "user-context": UserContextMenuPatch,
         "channel-context": ChannelContextMenuPatch
-    }
+    },
+    async start() {
+        startTime = Date.now();
+    },
 });
