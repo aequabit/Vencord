@@ -27,7 +27,7 @@ import { classes } from "@utils/misc";
 import { ModalContent, ModalFooter, ModalHeader, ModalProps, ModalRoot, ModalSize, openModalLazy } from "@utils/modal";
 import definePlugin, { OptionType } from "@utils/types";
 import { findByCodeLazy, findByPropsLazy, findComponentByCodeLazy, findLazy, findStoreLazy } from "@webpack";
-import { Button, ChannelStore, Clickable, Clipboard, ContextMenuApi, Forms, Menu, MessageActions, MessageCache, MessageStore, RestAPI, ScrollerThin, SelectedChannelStore, SnowflakeUtils, Text, TextInput, Timestamp, Toasts, UserStore } from "@webpack/common";
+import { Button, ChannelStore, Clickable, Clipboard, ContextMenuApi, Forms, GuildMemberStore, GuildStore, Menu, MessageActions, MessageCache, MessageStore, RestAPI, ScrollerThin, SelectedChannelStore, SnowflakeUtils, Text, TextInput, Timestamp, Toasts, UserStore } from "@webpack/common";
 import { Channel, Message, User } from "discord-types/general";
 import messageDecorations from "plugins/_api/messageDecorations";
 import { PropsWithChildren } from "react";
@@ -818,7 +818,7 @@ export function VoiceChannelEventsModal({ modalProps, voiceChannelId }: VoiceCha
                         <div className="title_eebd33">
                             <div className="overflowEllipsis_eebd33">
                                 <span className="userHook_eebd33">
-                                    <div className="defaultColor_a595eb text-md/normal_dc00ef" data-text-variant="text-md/normal">{user.username}</div>
+                                    <div className="defaultColor_a595eb text-md/normal_dc00ef" data-text-variant="text-md/normal">{GuildMemberStore.getNick(channel.guild_id, user.id)} ({user.username})</div>
                                 </span> {ev.type === "join" ? "joined" : "left"}
                             </div>
                         </div>
@@ -991,6 +991,7 @@ export const openChannelLimitModal = () =>
 export const openChannelTransferConfirmModal = (userId: string, channelId: string) =>
     openModalLazy(async () => {
         const user = UserStore.getUser(userId);
+        const channel = ChannelStore.getChannel(channelId);
         return modalProps => <ConfirmModal
 
             modalProps={modalProps}
@@ -1004,13 +1005,13 @@ export const openChannelTransferConfirmModal = (userId: string, channelId: strin
                 <UserSummaryItem
                     users={[user]}
                     count={1}
-                    guildId={channelId}
+                    guildId={channel.guild_id}
                     renderIcon={false}
                     site={40}
                     showDefaultAvatarsForNullUsers
                     showUserPopout
                 />
-                <Forms.FormText variant="text-lg/medium" style={{ marginLeft: "4px" }}><span style={{ lineHeight: "24px" }}> {user.username}?</span></Forms.FormText>
+                <Forms.FormText variant="text-lg/medium" style={{ marginLeft: "4px" }}><span style={{ lineHeight: "24px" }}> {GuildMemberStore.getNick(channel.guild_id, user.id)}?</span></Forms.FormText>
             </div>
         </ConfirmModal >;
     });
