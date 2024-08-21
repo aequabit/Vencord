@@ -21,6 +21,8 @@ import { MessageDecorations } from "@api/index";
 import { showNotification } from "@api/Notifications";
 import { definePluginSettings, Settings } from "@api/Settings";
 import { classNameFactory } from "@api/Styles";
+import { Grid } from "@components/Grid";
+import { Margins } from "@utils/margins";
 import { classes } from "@utils/misc";
 import { ModalContent, ModalFooter, ModalHeader, ModalProps, ModalRoot, ModalSize, openModalLazy } from "@utils/modal";
 import definePlugin, { OptionType } from "@utils/types";
@@ -532,7 +534,11 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
             <Menu.MenuItem
                 id="vc-transfer"
                 label="Transfer voice channel"
-                action={() => sendMessage(voiceChannelId, `!voice-transfer <@${user.id}>`)}
+                action={
+                    () => settings.store.voiceTransferConfirm
+                        ? openChannelTransferConfirmModal(user.id, voiceChannelId)
+                        : sendMessage(voiceChannelId, `!voice-transfer <@${user.id}>`)
+                }
             />
         );
 
@@ -599,12 +605,12 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
     // No voice channel or not the current one
     if (!voiceChannelId || userVoiceState.channelId !== voiceChannelId) return;
 
-    if (true/*settings.store.voiceLimit*/) {
+    if (settings.store.voiceEventLog) {
         children.push(
             <Menu.MenuItem
                 id="vc-user-log"
                 label="Event log"
-                action={() => openVoiceChannelEventsModal(voiceChannelId)}
+                action={() => openVoiceChannelEventsModal(channel.id)}
             />
         );
     }
@@ -898,6 +904,60 @@ export function TextInputModal({ modalProps, modalHeading, inputLabel, submitBut
     );
 }
 
+interface ConfirmModalProps {
+    modalProps: ModalProps;
+    modalHeading: string;
+    confirmText: string;
+    cancelText: string;
+    submitCallback: (confirmed: boolean) => void;
+}
+
+export function ConfirmModal({ modalProps, modalHeading, confirmText = "Confirm", cancelText = "Cancel", submitCallback, children }: PropsWithChildren<ConfirmModalProps>) {
+    const me = UserStore.getCurrentUser();
+    const userVoiceState = VoiceStateStore.getVoiceStateForUser(me.id);
+    if (!userVoiceState) return null;
+
+    const submit = async (e: React.FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement, MouseEvent>, confirmed: boolean) => {
+        e.preventDefault();
+        submitCallback(confirmed);
+        modalProps.onClose();
+    };
+
+
+    return (
+        <ModalRoot {...modalProps}>
+            <ModalHeader>
+                <Text variant="heading-lg/semibold" style={{ flexGrow: 1 }}>{modalHeading}</Text>
+            </ModalHeader>
+
+            <ModalContent className={cl("content")}>
+                <Forms.FormSection>
+                    {children}
+                </Forms.FormSection >
+            </ModalContent>
+            <ModalFooter>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gridGap: "1em" }}>
+                    <Button
+                        style={{ left: "0 !important" }}
+                        size={Button.Sizes.MEDIUM}
+                        onClick={e => submit(e, true)}
+                    >
+                        {confirmText}
+                    </Button>
+                    <Button
+                        style={{ right: "0 !important" }}
+                        size={Button.Sizes.MEDIUM}
+                        color={Button.Colors.RED}
+                        onClick={e => submit(e, false)}
+                    >
+                        {cancelText}
+                    </Button>
+                </div>
+            </ModalFooter>
+        </ModalRoot>
+    );
+}
+
 export const openVoiceChannelEventsModal = (voiceChannelId: string) =>
     openModalLazy(async () => {
         return modalProps => <VoiceChannelEventsModal
@@ -926,6 +986,33 @@ export const openChannelLimitModal = () =>
             submitButtonText="Save"
             submitCallback={result => sendMessage(SelectedChannelStore.getVoiceChannelId() as string, `!voice-limit ${parseInt(result)}`)}
         />;
+    });
+
+export const openChannelTransferConfirmModal = (userId: string, channelId: string) =>
+    openModalLazy(async () => {
+        const user = UserStore.getUser(userId);
+        return modalProps => <ConfirmModal
+
+            modalProps={modalProps}
+            modalHeading="Transfer channel"
+            confirmText="Transfer channel"
+            cancelText="Cancel"
+            submitCallback={confirmed => confirmed && sendMessage(channelId, `!voice-transfer <@${userId}>`)}
+        >
+            <div style={{ display: "inline-flex" }}>
+                <Forms.FormText variant="text-lg/medium" style={{ marginRight: "6px" }}><span style={{ lineHeight: "24px" }}>Transfer the current voice channel to </span></Forms.FormText>
+                <UserSummaryItem
+                    users={[user]}
+                    count={1}
+                    guildId={channelId}
+                    renderIcon={false}
+                    site={40}
+                    showDefaultAvatarsForNullUsers
+                    showUserPopout
+                />
+                <Forms.FormText variant="text-lg/medium" style={{ marginLeft: "4px" }}><span style={{ lineHeight: "24px" }}> {user.username}?</span></Forms.FormText>
+            </div>
+        </ConfirmModal >;
     });
 
 const settings = definePluginSettings({
@@ -959,6 +1046,11 @@ const settings = definePluginSettings({
         description: "Add !voice-transfer shortcut to user context menus",
         default: true
     },
+    voiceTransferConfirm: {
+        type: OptionType.BOOLEAN,
+        description: "Whether to confirm voice channel transfers",
+        default: true
+    },
     voiceModeration: {
         type: OptionType.BOOLEAN,
         description: "Add context menu options to assign moderation permissions",
@@ -967,6 +1059,11 @@ const settings = definePluginSettings({
     voiceModeratorImmunity: {
         type: OptionType.BOOLEAN,
         description: "Whether to make users with at least one moderation permission immune to kicks and bans by other moderators",
+        default: true
+    },
+    voiceEventLog: {
+        type: OptionType.BOOLEAN,
+        description: "Add event logs to voice channel context menus",
         default: true
     },
     voiceLimit: {
