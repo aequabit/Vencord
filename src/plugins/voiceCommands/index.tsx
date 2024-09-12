@@ -31,82 +31,31 @@ import { Button, ChannelStore, Clickable, Clipboard, ContextMenuApi, Forms, Guil
 import { Channel, Message, User } from "discord-types/general";
 import messageDecorations from "plugins/_api/messageDecorations";
 import { PropsWithChildren } from "react";
+import { CallHangupIcon, CheckmarkIcon, EmptyIcon, UserWaveIcon } from "./icons";
+import { notify, sendMessage } from "./util";
 
-type IconProps = JSX.IntrinsicElements["svg"];
-interface BaseIconProps extends IconProps {
-    viewBox: string;
-}
-function Icon({ height = 24, width = 24, className, children, viewBox, ...svgProps }: PropsWithChildren<BaseIconProps>) {
-    return (
-        <svg
-            className={classes(className, "vc-icon")}
-            role="img"
-            width={width}
-            height={height}
-            viewBox={viewBox}
-            {...svgProps}
-        >
-            {children}
-        </svg>
-    );
-}
+// TODO: -
+// - Show stream viewers at the bottom on private servers
+// - Build context menu conditions at beginning of function, not dynamically
+// - Determine channel owner by channel permissions
+// - Recognize commands simply containing a user ID instead of a full mention
+// - Sync server for permissions/commands
+//  - Also use for kick/ban actions instead of sending messages
+// - Detect owner using !voice-owner
+// - Don't display all events at once in event log
+// - Don't close context menu on permission check/uncheck
+// - Check/uncheck all permissions at
+// - Make blocking a check/uncheck option
+// - Only respond to commands by channel owner
+//  - Detect when possible (.find + match regex containing message and userid)
+//  - Select owner manually
+//  - Allow channel context options even if not in voice
+// - Queue bans if cooldown still in effect
+//  - Kick users until the cooldown expires
+//  - Calculate cooldown from failed commands
 
-function UserWaveIcon({ height = 24, width = 24, className }: IconProps) {
-    return (
-        <Icon
-            height={height}
-            width={width}
-            className={classes(className, "vc-user-wave-icon")}
-            viewBox="0 0 24 24"
-        >
-            <g fill="none" fill-rule="evenodd">
-                <path fill="white" d="M13 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"></path><path fill="white" d="M3 5v-.75C3 3.56 3.56 3 4.25 3s1.24.56 1.33 1.25C6.12 8.65 9.46 12 13 12h1a8 8 0 0 1 8 8 2 2 0 0 1-2 2 .21.21 0 0 1-.2-.15 7.65 7.65 0 0 0-1.32-2.3c-.15-.2-.42-.06-.39.17l.25 2c.02.15-.1.28-.25.28H9a2 2 0 0 1-2-2v-2.22c0-1.57-.67-3.05-1.53-4.37A15.85 15.85 0 0 1 3 5Z"></path>
-            </g>
-        </Icon>
-    );
-}
-
-function CallHangupIcon({ height = 24, width = 24, className }: IconProps) {
-    return (
-        <Icon
-            height={height}
-            width={width}
-            className={classes(className, "vc-user-wave-icon")}
-            viewBox="0 0 24 24"
-        >
-            <g fill="none" fill-rule="evenodd">
-                <defs><clipPath id="__lottie_element_151"><rect width={width} height={height} x="0" y="0"></rect></clipPath><clipPath id="__lottie_element_153"><path d="M0,0 L600,0 L600,600 L0,600z"></path></clipPath></defs><g clip-path="url(#__lottie_element_151)"><g clip-path="url(#__lottie_element_153)" transform="matrix(0.03999999910593033,0,0,0.03999999910593033,0,0)" opacity="1" style={{ display: "block" }}><g transform="matrix(25,0,0,25,300,315)" opacity="1" style={{ display: "block" }}><g opacity="1" transform="matrix(1,0,0,1,0,-0.6100000143051147)"><path fill="white" fill-opacity="1" d=" M9.335000038146973,-1.8179999589920044 C4.184999942779541,-6.9670000076293945 -4.164000034332275,-6.9670000076293945 -9.312999725341797,-1.8179999589920044 C-11.690999984741211,0.5609999895095825 -11.35099983215332,3.6040000915527344 -9.555999755859375,5.39900016784668 C-9.300999641418457,5.6539998054504395 -8.909000396728516,5.7129998207092285 -8.59000015258789,5.544000148773193 C-8.59000015258789,5.544000148773193 -4.269999980926514,3.256999969482422 -4.269999980926514,3.256999969482422 C-3.871000051498413,3.0460000038146973 -3.683000087738037,2.5769999027252197 -3.8259999752044678,2.1489999294281006 C-3.8259999752044678,2.1489999294281006 -4.558000087738037,-0.04600000008940697 -4.558000087738037,-0.04600000008940697 C-1.8250000476837158,-1.9980000257492065 1.8459999561309814,-1.9980000257492065 4.578999996185303,-0.04600000008940697 C4.578999996185303,-0.04600000008940697 3.815000057220459,2.757999897003174 3.815000057220459,2.757999897003174 C3.693000078201294,3.2070000171661377 3.9240000247955322,3.677000045776367 4.354000091552734,3.8540000915527344 C4.354000091552734,3.8540000915527344 8.63599967956543,5.617000102996826 8.63599967956543,5.617000102996826 C8.946000099182129,5.744999885559082 9.303000450134277,5.672999858856201 9.539999961853027,5.435999870300293 C11.331999778747559,3.6440000534057617 11.708999633789062,0.5559999942779541 9.335000038146973,-1.8179999589920044z"></path></g></g></g></g>
-            </g>
-        </Icon >
-    );
-}
-
-function CheckmarkIcon({ height = 24, width = 24, className }: IconProps) {
-    return (
-        <Icon
-            height={height}
-            width={width}
-            className={classes(className, "vc-checkmark-icon")}
-            viewBox="0 0 24 24"
-        >
-            <g fill="none" fill-rule="evenodd">
-                <path fill="var(--white-500)" fill-rule="evenodd" d="M12 23a11 11 0 1 0 0-22 11 11 0 0 0 0 22Zm5.7-13.3a1 1 0 0 0-1.4-1.4L10 14.58l-2.3-2.3a1 1 0 0 0-1.4 1.42l3 3a1 1 0 0 0 1.4 0l7-7Z" clip-rule="evenodd" ></path>
-            </g>
-        </Icon>
-    );
-}
-
-function EmptyIcon({ height = 24, width = 24, className }: IconProps) {
-    return (
-        <Icon
-            height={height}
-            width={width}
-            className={classes(className, "vc-link-icon")}
-            viewBox="0 0 24 24"
-        >
-        </Icon>
-    );
-}
+// ??? API to detemine channel permissions
+// - complete anonymous (only hashes)
 
 interface UserContextProps {
     channel: Channel;
@@ -120,7 +69,6 @@ interface ChannelContextProps {
 
 const ChannelTypes = findLazy(m => m.ANNOUNCEMENT_THREAD === 10);
 const VoiceStateStore = findStoreLazy("VoiceStateStore");
-const cl = classNameFactory("vc-pindms-modal-");
 
 interface VoiceState {
     userId: string;
@@ -130,70 +78,6 @@ interface VoiceState {
     mute: boolean;
     selfDeaf: boolean;
     selfMute: boolean;
-}
-
-function sendMessage(channelId: string, content: string, messageReference?: string) {
-    RestAPI.post({
-        url: `/channels/${channelId}/messages`,
-        body: {
-            channel_id: channelId,
-            content: content,
-            nonce: SnowflakeUtils.fromTimestamp(Date.now()),
-            sticker_ids: [],
-            type: 0,
-            attachments: [],
-            message_reference: messageReference ? { message_id: messageReference } : null,
-        }
-    });
-}
-
-function _sendMessage(channelId: string, content: string, messageReference?: string) {
-    const msg = {
-        content,
-        tts: false,
-        invalidEmojis: [],
-        validNonShortcutEmojis: []
-    };
-
-    MessageActions._sendMessage(channelId, msg);
-}
-
-const zentrumBotId = "1110336525176164452";
-
-function getChannelMessages(channelId: string) {
-    const channelMessages = MessageStore.getMessages(channelId);
-    console.log("CHANNEL MESSAGES: ", channelMessages);
-    if (!channelMessages || !channelMessages.toArray) return;
-    console.log("CHECK:", channelMessages, channelMessages.toArray !== undefined);
-
-    for (const message of channelMessages.toArray()) {
-        if (!message.author || !message.author.id) continue;
-
-        // TODO: Don't do this
-        if (message.author.id !== zentrumBotId) return;
-
-        console.log("BOT MESSAGE:", message);
-
-        // @Gesocksbeseitigungsminister, du hast @Miri Egirl aus dem temporären Sprachkanal gekickt.
-        // if (!message.)
-    }
-
-    // console.log(MessageCache._channelMessages);
-}
-
-let _notifyAbort = false;
-export function notify(text: string, icon?: string, onClick?: () => void) {
-    // Trash
-    if (_notifyAbort) return;
-    _notifyAbort = true;
-    setTimeout(() => _notifyAbort = false, 2500);
-
-    showNotification({
-        title: "VoiceCommands",
-        body: text,
-        icon,
-        onClick
-    });
 }
 
 function getBlockedUsers(): string[] {
@@ -243,6 +127,12 @@ const setModeratorUsers = (moderatorUserConfig: UserAttributeList) => Settings.p
 
 const userIsModerator = (userId: string) => getModeratorUsers()[userId] !== undefined;
 
+function userGetPermissions(userId: string): UserModerationPermission[] {
+    const moderatorUsers = getModeratorUsers();
+    const userPermissions = moderatorUsers[userId];
+    return userPermissions || null;
+}
+
 function userHasPermission(userId: string, permission: UserModerationPermission) {
     const moderatorUsers = getModeratorUsers();
     const userPermissions = moderatorUsers[userId];
@@ -272,28 +162,114 @@ function userTogglePermission(userId: string, permission: UserModerationPermissi
         userRemovePermission(userId, permission);
 }
 
+function userIdFromTag(userTag: string): string | undefined {
+    const matches = /<@!?(\d+)>/g.exec(userTag);
+    if (!matches) return undefined;
+    if (isNaN(parseInt(matches[1]))) return undefined; // TODO: ???
+    return matches[1];
+}
+
+function userGetName(userId: string, guildId?: string): string {
+    const user: User & { globalName?: string; } = UserStore.getUser(userId);
+    const displayName = user.globalName || user.username;
+    if (!guildId) return displayName;
+
+    const guildMember = GuildMemberStore.getMember(guildId, userId);
+    if (!guildMember) return displayName;
+    return guildMember.nick || displayName;
+}
+
+const zentrumBotId = "1110336525176164452";
+
+type VCMessagePattern = [
+    RegExp, // Message pattern
+    number, // Expected amount of match results
+    number // Index of the capture group containing the owner ID
+];
+
+// TODO: Benchmark this against just splitting the string
+const VCMessagePatterns: VCMessagePattern[] = [
+    [/<@!?(\d+)>, du hast <@!?(\d+)> aus (?:dem|diesem) temporären Sprachkanal (?:gekickt|gebannt)/g, 2, 0],
+    [/<@!?(\d+)>, du hast diesen temporären Sprachkanal zu/g, 1, 0],
+    [/<@!?(\d+)>, du hast die Eigentumsrechte des temporären Sprachkanals auf <@!?(\d+)> übertragen/g, 2, 1],
+    [/<@!?(\d+)>, du hast das Nutzerlimit dieses temporären Sprachkanals zu/g, 1, 0]
+];
+
+function getOwnerUidFromMessage(message: string): string | null {
+    for (const pattern of VCMessagePatterns) {
+        const [regex, expectedMatches, index] = pattern;
+
+        const patternResult = regex.exec(message);
+        if (!patternResult) continue; // No match
+        if (patternResult.length - 1 !== expectedMatches) continue; // Invalid amount of matches
+
+        const ownerUid = patternResult[index + 1];
+
+        // Is transfer command, remove the owner that was set on channel creation
+        // TODO: Don't hardcode this (track transfers and ignore successful commands from non-owners)
+        if (pattern === VCMessagePatterns[1] || pattern === VCMessagePatterns[2]) {
+            console.log("REMOVE PRESET OWNER");
+            // Delete preset channel owner if it exists
+            channelOwners.delete(ownerUid);
+        }
+
+        return ownerUid;
+    }
+
+    return null;
+}
+
 const channelOwners = new Map<string, string>();
 
-function isChannelOwner(channelId: string, userId: string): boolean {
-    if (!channelOwners.has(channelId)) return false; // No owner set for channel
-    if (channelOwners.get(channelId) !== userId) return false; // User is not the owner
-    return true;
-}
-
 function setChannelOwner(channelId: string, userId: string) {
-    channelOwners[channelId] = userId;
+    channelOwners.set(channelId, userId);
 }
 
-function determineChannelOwner(channelId: string): string | null {
-    const channel = ChannelStore.getChannel(channelId);
-    if (!channel) return null;
+function getBotMessageContent(message: Message): string | undefined {
+    if (!message.author || !message.author.id) return;
+
+    // TODO: Don't do this
+    if (message.author.id !== zentrumBotId) return;
+
+    // Check for the bot message embed
+    if (!message.embeds || message.embeds.length === 0) return;
+    if (!message.embeds[0] || !message.embeds[0].rawDescription) return;
+
+    return message.embeds[0].rawDescription;
+}
+
+function getChannelOwnerUid(channelId: string): string | null {
+    const manuallySetUid = channelOwners.get(channelId);
+    if (manuallySetUid) return manuallySetUid;
 
     const channelMessages = MessageStore.getMessages(channelId);
-    if (!channelMessages) return null;
+    if (!channelMessages || !channelMessages.toArray) return null;
 
-    // console.log("CHANNEL MESSAGES:", channelMessages);
+    for (const message of channelMessages.toArray()) {
+        const botMessage = getBotMessageContent(message);
+        if (!botMessage) continue;
 
-    return "";
+        const ownerUid = getOwnerUidFromMessage(botMessage);
+        if (!ownerUid) continue;
+
+        // Found owner UID
+        return ownerUid;
+
+        // for (const scanner of channelMessageScanners) {
+        //     const patternResult = scanner.pattern.exec(botMessage);
+        //     if (!patternResult) continue;
+        //     const ownerUserId = scanner.parser(patternResult);
+        //     console.log("  owner: ", ownerUserId);
+        //     console.log("  pattern: ", scanner.pattern.source);
+        // }
+
+        // @Gesocksbeseitigungsminister, du hast @Miri Egirl aus dem temporären Sprachkanal gekickt.
+        // @Gesocksbeseitigungsminister, du hast @Miri Egirl aus dem temporären Sprachkanal gekickt.
+        // if (!message.)
+    }
+
+    // console.log(MessageCache._channelMessages);
+    return null;
 }
 
 type VoiceChannelEvent = { type: "join" | "leave"; at: number; userId: string; };
@@ -303,8 +279,6 @@ let voiceChannelEvents: VoiceChannelEventLog = {};
 type UserVoiceStateLog = { [userId: string]: (string | undefined)[]; };
 let userVoiceStateLog: UserVoiceStateLog = {};
 
-let startTime: number | undefined = undefined;
-
 const onVoiceStateUpdates = ({ voiceStates }: { voiceStates: VoiceState[]; }) => {
     const me = UserStore.getCurrentUser();
 
@@ -312,25 +286,18 @@ const onVoiceStateUpdates = ({ voiceStates }: { voiceStates: VoiceState[]; }) =>
     for (const state of voiceStates) {
         const { userId, channelId, oldChannelId } = state;
 
-        // TÖRÖÖÖÖÖÖÖÖ
-        // if (userId !== "1157043198833733692") continue;
-
         // Log user channel join
         if (!userVoiceStateLog[userId]) userVoiceStateLog[userId] = [];
         userVoiceStateLog[userId].push(channelId);
 
         const voiceStateLog = userVoiceStateLog[userId];
 
-        // For some reason oldChannelId is always the same as channelId when switching from one channel to another
         let realOldChannelId: string | undefined = undefined;
+        // For some reason oldChannelId is always the same as channelId when switching from one channel to another
+        // Try to get the previous channel from our own log
         if (voiceStateLog.length > 1) {
             realOldChannelId = voiceStateLog[voiceStateLog.length - 2];
         }
-
-        const _user = UserStore.getUser(userId).username;
-        const _channel = channelId ? ChannelStore.getChannel(channelId).name : "<null>";
-        const _oldChannel = realOldChannelId ? ChannelStore.getChannel(realOldChannelId).name : "<null>";
-        // console.log(`USER=${_user} CHANNEL=${_channel} OLDCHANNEL=${_oldChannel}`);
 
         if (realOldChannelId !== undefined) {
             if (!voiceChannelEvents[realOldChannelId])
@@ -376,6 +343,7 @@ const onVoiceStateUpdates = ({ voiceStates }: { voiceStates: VoiceState[]; }) =>
             if (!oldChannelId) continue;
             const oldChannel = ChannelStore.getChannel(oldChannelId);
             if (!oldChannel) continue;
+
             // TODO: Don't hardcode this
             const oldChannelIsLobby = oldChannel.name.includes("Voice erstellen") || oldChannel.name.includes("Kanal erstellen");
             if (!oldChannelIsLobby) continue;
@@ -391,8 +359,8 @@ const onVoiceStateUpdates = ({ voiceStates }: { voiceStates: VoiceState[]; }) =>
             }
         }
 
-        // User is blocked
-        if (getBlockedUsers().includes(userId)) {
+        // User is blocked and blocking is enabled
+        if (Settings.plugins.VoiceCommands.voiceBlock && getBlockedUsers().includes(userId)) {
             sendMessage(voiceChannelId, `!voice-ban <@${userId}>`);
         }
     }
@@ -400,68 +368,106 @@ const onVoiceStateUpdates = ({ voiceStates }: { voiceStates: VoiceState[]; }) =>
 
 const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic: boolean; }) => {
     //if (optimistic) return;
-    const channel = ChannelStore.getChannel(message.channel_id);
+    const messageChannel = ChannelStore.getChannel(message.channel_id);
 
     const me = UserStore.getCurrentUser();
+    const myVoiceState = VoiceStateStore.getVoiceStateForUser(me.id);
+    if (!myVoiceState) return;
 
-    // Get our current voice state of the selected user
-    const userVoiceState = VoiceStateStore.getVoiceStateForUser(me.id);
-    if (!userVoiceState) return;
+    if (messageChannel.type !== 2) return; // Not a voice channel
+    if (messageChannel.id !== myVoiceState.channelId) return; // Not our voice channel
 
-    if (channel.type !== 2) return; // Not a voice channel
+    let content = message.content;
 
-    if (channel.id !== userVoiceState.channelId) return; // Not our voice channel
+    // Shortcuts
+    // TODO: Don't check this here
+    if (content.startsWith(".k ")) content = content.replace(".k ", "!voice-kick ");
+    if (content.startsWith(".b ")) content = content.replace(".b ", "!voice-ban ");
+    if (content.startsWith(".lmt ")) {
+        console.log("LMT", content);
+        content = content.replace(".lmt ", "!voice-limit ");
+    }
 
-    if (message.content.startsWith(".msg")) {
-        getChannelMessages(channel.id);
+    if (content.startsWith(".msg")) {
+        console.log(channelOwners);
+        const channelOwnerUid = getChannelOwnerUid(messageChannel.id);
+        if (!channelOwnerUid) {
+            console.log("No owner found");
+            return;
+        }
+
+        console.log(`Channel ${messageChannel.name} is owned by ${userGetName(channelOwnerUid, messageChannel.guild_id)}`);
         return;
     }
 
     if (message.author.id === me.id) return; // Message was sent by us
 
     const userModeratorPermissions = getModeratorUsers()[message.author.id];
-
-    if (message.content.startsWith(".permissions")) {
-        if (!userModeratorPermissions)
-            sendMessage(channel.id, "You are not a moderator", message.id);
-        else
-            sendMessage(channel.id, `Your permissions: ${userModeratorPermissions.join(", ")}`, message.id);
-
-        return;
-    }
-
     if (!userModeratorPermissions) return; // Sender is not a moderator
 
-    const messageParts = message.content
+    const messageParts = content
         .substring(1) // Remove prefix (! / .)
         .replace("voice-", "")
         .split(" "); // Split at space, i.e. "ban @<1234567890>" -> [voice-ban, @<1234567890>]
 
-    if (messageParts.length < 1 || messageParts.length > 2) return; // Message has too few or too many parts
+    if (messageParts.length < 1) return; // Message is empty
 
     const command = messageParts[0];
+
     let permissionName = command;
     if (command === "unban") permissionName = "ban"; // Shitty hack
     if (command === "unlock") permissionName = "lock"; // Shitty hack
-    if (!userModeratorPermissions.includes(permissionName as UserModerationPermission)) return; // No permissions for command
 
     if (["ban", "unban", "kick", "limit", "rename"].includes(command))
         if (messageParts.length < 2) return; // Command argument missing
 
     const commandArg = messageParts[1];
 
+    if (command === "permissions") {
+        // User is not a moderator
+        if (!userModeratorPermissions) return;
+
+        // No user ID provided, get the message author's permissions
+        if (!commandArg) {
+            sendMessage(messageChannel.id, `Your permissions: ${userModeratorPermissions.join(", ")}`, message.id);
+            return;
+        }
+
+        const userId = userIdFromTag(commandArg);
+        if (!userId) return;
+
+        // It's us
+        if (userId === me.id) {
+            sendMessage(messageChannel.id, "I own the channel", message.id);
+        }
+
+        const userPermissions = userGetPermissions(userId);
+        if (!userPermissions) {
+            sendMessage(messageChannel.id, `${userGetName(userId)} is not a moderator`, message.id);
+            return;
+        }
+
+        sendMessage(messageChannel.id, `Permissions: ${userPermissions.join(", ")}`, message.id);
+        return;
+    }
+
+    if (!userModeratorPermissions.includes(permissionName as UserModerationPermission)) return; // No permissions for command
+
     // User tag is invalid
     if (["ban", "unban", "kick"].includes(command)) {
+        // TODO: Replace with userIdFromTag
         const userId = commandArg.replace(">", "").replace("<@", "");
         if (userId === commandArg) return; // No tags were present in the first place
         if (isNaN(parseInt(userId))) return; // User ID is not a valid number
 
         // Target is another moderator
         if (command !== "unban" && Settings.plugins.VoiceCommands.voiceModeratorImmunity && userIsModerator(userId)) {
-            sendMessage(channel.id, "Cannot kick or ban other moderators", message.id);
+            sendMessage(messageChannel.id, "Cannot kick or ban other moderators", message.id);
             return;
         }
     }
+
+    // TODO: + -
 
     // Limit argument is not a valid number
     if (command === "limit" && isNaN(parseInt(commandArg))) return;
@@ -469,7 +475,7 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
     // Channel name argument is too short or too long
     if (command === "rename" && commandArg.length < 1 || commandArg.length > 99) return;
 
-    sendMessage(channel.id, message.content);
+    sendMessage(messageChannel.id, content);
 };
 
 const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: UserContextProps) => {
@@ -605,6 +611,8 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
     // No voice channel or not the current one
     if (!voiceChannelId || userVoiceState.channelId !== voiceChannelId) return;
 
+    const voiceChannel = ChannelStore.getChannel(voiceChannelId);
+
     if (settings.store.voiceEventLog) {
         children.push(
             <Menu.MenuItem
@@ -625,7 +633,15 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
             />
         );
 
-        for (const option of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 18, 20, 25])
+        userLimitOptionElements.push(
+            <Menu.MenuItem
+                id="vc-change-limit-plusone"
+                label="+ 1"
+                action={() => sendMessage(channel.id, `!voice-limit ${(channel.userLimit || 0) + 1}`)}
+            />
+        );
+
+        for (const option of [2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 18, 20, 25])
             userLimitOptionElements.push(
                 <Menu.MenuItem
                     id={"vc-change-limit-" + option}
@@ -753,6 +769,9 @@ const UserSummaryItem = findComponentByCodeLazy("defaultRenderUser", "showDefaul
 const UserPopoutSection = findByCodeLazy(".lastSection", "children:");
 const AvatarStyles = findByPropsLazy("moreUsers", "emptyUser", "avatarContainer", "clickableAvatar");
 
+// TODO: ???
+const pinDmsModalCl = classNameFactory("vc-pindms-modal-");
+
 export function VoiceChannelEventsModal({ modalProps, voiceChannelId }: VoiceChannelEventsModalProps) {
     const channel = ChannelStore.getChannel(voiceChannelId);
     if (!channel) return null;
@@ -770,7 +789,7 @@ export function VoiceChannelEventsModal({ modalProps, voiceChannelId }: VoiceCha
             message: "Copied username to clipboard: " + username,
             type: Toasts.Type.MESSAGE,
             options: {
-                position: Toasts.Position.BOTTOM,
+                position: Toasts.Position.TOP,
                 duration: 1800
             }
         });
@@ -778,7 +797,7 @@ export function VoiceChannelEventsModal({ modalProps, voiceChannelId }: VoiceCha
 
     const createListItem = (ev: VoiceChannelEvent) => {
         const user = UserStore.getUser(ev.userId);
-
+        console.log("EV USER", user);
         // TODO: Check fo user existence (add placeholder if undefined)
         // TODO: Use user context menu instead of onClick copy handler
         return (
@@ -818,7 +837,7 @@ export function VoiceChannelEventsModal({ modalProps, voiceChannelId }: VoiceCha
                         <div className="title_eebd33">
                             <div className="overflowEllipsis_eebd33">
                                 <span className="userHook_eebd33">
-                                    <div className="defaultColor_a595eb text-md/normal_dc00ef" data-text-variant="text-md/normal">{GuildMemberStore.getNick(channel.guild_id, user.id)} ({user.username})</div>
+                                    <div className="defaultColor_a595eb text-md/normal_dc00ef" data-text-variant="text-md/normal">{userGetName(user.id, channel.guild_id)} ({user.username})</div>
                                 </span> {ev.type === "join" ? "joined" : "left"}
                             </div>
                         </div>
@@ -828,7 +847,7 @@ export function VoiceChannelEventsModal({ modalProps, voiceChannelId }: VoiceCha
                                     ? null
                                     : (
                                         <Timestamp
-                                            className={cl("timestamp")}
+                                            className={pinDmsModalCl("timestamp")}
                                             timestamp={new Date(ev.at)}
                                             isEdited={true}
                                             isInline={false}
@@ -848,7 +867,7 @@ export function VoiceChannelEventsModal({ modalProps, voiceChannelId }: VoiceCha
                 <Text variant="heading-lg/semibold" style={{ flexGrow: 1 }}>Event log: {channel.name}</Text>
             </ModalHeader>
 
-            <ModalContent className={cl("content")}>
+            <ModalContent className={pinDmsModalCl("content")}>
                 <Forms.FormSection>
                     <div style={{ minWidth: "480px" }} role="list" tabIndex={0} data-list-id="audit-log">
                         {voiceChannelEvents[voiceChannelId].reverse().map(ev => createListItem(ev))}
@@ -888,7 +907,7 @@ export function TextInputModal({ modalProps, modalHeading, inputLabel, submitBut
 
             {/* form is here so when you press enter while in the text input it submits */}
             <form onSubmit={onSave}>
-                <ModalContent className={cl("content")}>
+                <ModalContent className={pinDmsModalCl("content")}>
                     <Forms.FormSection>
                         <Forms.FormTitle>{inputLabel}</Forms.FormTitle>
                         <TextInput
@@ -930,7 +949,7 @@ export function ConfirmModal({ modalProps, modalHeading, confirmText = "Confirm"
                 <Text variant="heading-lg/semibold" style={{ flexGrow: 1 }}>{modalHeading}</Text>
             </ModalHeader>
 
-            <ModalContent className={cl("content")}>
+            <ModalContent className={pinDmsModalCl("content")}>
                 <Forms.FormSection>
                     {children}
                 </Forms.FormSection >
@@ -1011,128 +1030,130 @@ export const openChannelTransferConfirmModal = (userId: string, channelId: strin
                     showDefaultAvatarsForNullUsers
                     showUserPopout
                 />
-                <Forms.FormText variant="text-lg/medium" style={{ marginLeft: "4px" }}><span style={{ lineHeight: "24px" }}> {GuildMemberStore.getNick(channel.guild_id, user.id)}?</span></Forms.FormText>
+                <Forms.FormText variant="text-lg/medium" style={{ marginLeft: "4px" }}><span style={{ lineHeight: "24px" }}> {userGetName(userId, channel.guild_id)}?</span></Forms.FormText>
             </div>
         </ConfirmModal >;
     });
 
-const settings = definePluginSettings({
-    voiceKick: {
-        type: OptionType.BOOLEAN,
-        description: "Add !voice-kick shortcut to user context menus",
-        default: true
-    },
-    voiceBan: {
-        type: OptionType.BOOLEAN,
-        description: "Add !voice-ban shortcut to user context menus",
-        default: true
-    },
-    voiceUnban: {
-        type: OptionType.BOOLEAN,
-        description: "Add !voice-unban shortcut to user context menus",
-        default: true
-    },
-    voiceBlock: {
-        type: OptionType.BOOLEAN,
-        description: "Adds the option to block a user to context menus",
-        default: false
-    },
-    voiceUnblock: {
-        type: OptionType.BOOLEAN,
-        description: "Adds the option to unblock a user to context menus",
-        default: false
-    },
-    voiceTransfer: {
-        type: OptionType.BOOLEAN,
-        description: "Add !voice-transfer shortcut to user context menus",
-        default: true
-    },
-    voiceTransferConfirm: {
-        type: OptionType.BOOLEAN,
-        description: "Whether to confirm voice channel transfers",
-        default: true
-    },
-    voiceModeration: {
-        type: OptionType.BOOLEAN,
-        description: "Add context menu options to assign moderation permissions",
-        default: true
-    },
-    voiceModeratorImmunity: {
-        type: OptionType.BOOLEAN,
-        description: "Whether to make users with at least one moderation permission immune to kicks and bans by other moderators",
-        default: true
-    },
-    voiceEventLog: {
-        type: OptionType.BOOLEAN,
-        description: "Add event logs to voice channel context menus",
-        default: true
-    },
-    voiceLimit: {
-        type: OptionType.BOOLEAN,
-        description: "Add !voice-limit shortcut to channel context menus",
-        default: true
-    },
-    voiceRename: {
-        type: OptionType.BOOLEAN,
-        description: "Add !voice-rename shortcut to channel context menus",
-        default: true
-    },
-    voiceRenamePresets: {
-        type: OptionType.STRING,
-        description: "Preset names to show in the rename menu (comma-separated, escape commas using \\,)",
-        default: ""
-    },
-    voiceClaim: {
-        type: OptionType.BOOLEAN,
-        description: "Add !voice-claim shortcut to channel context menus",
-        default: true
-    },
-    voiceLock: {
-        type: OptionType.BOOLEAN,
-        description: "Add !voice-lock shortcut to channel context menus",
-        default: true
-    },
-    voiceUnlock: {
-        type: OptionType.BOOLEAN,
-        description: "Add !voice-unlock shortcut to channel context menus",
-        default: true
-    },
-    voiceHide: {
-        type: OptionType.BOOLEAN,
-        description: "Add !voice-hide shortcut to channel context menus",
-        default: false
-    },
-    voiceReveal: {
-        type: OptionType.BOOLEAN,
-        description: "Add !voice-reveal shortcut to channel context menus",
-        default: false
-    },
-    blockedUserIDs: {
-        type: OptionType.STRING,
-        description: "IDs of blocked users (comma-separated)",
-        default: ""
-    },
-    moderatorUserConfig: {
-        type: OptionType.STRING,
-        description: "Moderator configuration (format: {\"<user id>\": [\"kick\", \"ban\", \"limit\", \"lock\", \"rename\"]})",
-        default: "{}"
-    }
-});
+// const settings = definePluginSettings({
+//     voiceKick: {
+//         type: OptionType.BOOLEAN,
+//         description: "Add !voice-kick shortcut to user context menus",
+//         default: true
+//     },
+//     voiceBan: {
+//         type: OptionType.BOOLEAN,
+//         description: "Add !voice-ban shortcut to user context menus",
+//         default: true
+//     },
+//     voiceUnban: {
+//         type: OptionType.BOOLEAN,
+//         description: "Add !voice-unban shortcut to user context menus",
+//         default: true
+//     },
+//     voiceBlock: {
+//         type: OptionType.BOOLEAN,
+//         description: "Adds the option to block a user to context menus",
+//         default: false
+//     },
+//     voiceUnblock: {
+//         type: OptionType.BOOLEAN,
+//         description: "Adds the option to unblock a user to context menus",
+//         default: false
+//     },
+//     voiceTransfer: {
+//         type: OptionType.BOOLEAN,
+//         description: "Add !voice-transfer shortcut to user context menus",
+//         default: true
+//     },
+//     voiceTransferConfirm: {
+//         type: OptionType.BOOLEAN,
+//         description: "Whether to confirm voice channel transfers",
+//         default: true
+//     },
+//     voiceModeration: {
+//         type: OptionType.BOOLEAN,
+//         description: "Add context menu options to assign moderation permissions",
+//         default: true
+//     },
+//     voiceModeratorImmunity: {
+//         type: OptionType.BOOLEAN,
+//         description: "Whether to make users with at least one moderation permission immune to kicks and bans by other moderators",
+//         default: true
+//     },
+//     voiceEventLog: {
+//         type: OptionType.BOOLEAN,
+//         description: "Add event logs to voice channel context menus",
+//         default: true
+//     },
+//     voiceLimit: {
+//         type: OptionType.BOOLEAN,
+//         description: "Add !voice-limit shortcut to channel context menus",
+//         default: true
+//     },
+//     voiceRename: {
+//         type: OptionType.BOOLEAN,
+//         description: "Add !voice-rename shortcut to channel context menus",
+//         default: true
+//     },
+//     voiceRenamePresets: {
+//         type: OptionType.STRING,
+//         description: "Preset names to show in the rename menu (comma-separated, escape commas using \\,)",
+//         default: ""
+//     },
+//     voiceClaim: {
+//         type: OptionType.BOOLEAN,
+//         description: "Add !voice-claim shortcut to channel context menus",
+//         default: true
+//     },
+//     voiceLock: {
+//         type: OptionType.BOOLEAN,
+//         description: "Add !voice-lock shortcut to channel context menus",
+//         default: true
+//     },
+//     voiceUnlock: {
+//         type: OptionType.BOOLEAN,
+//         description: "Add !voice-unlock shortcut to channel context menus",
+//         default: true
+//     },
+//     voiceHide: {
+//         type: OptionType.BOOLEAN,
+//         description: "Add !voice-hide shortcut to channel context menus",
+//         default: false
+//     },
+//     voiceReveal: {
+//         type: OptionType.BOOLEAN,
+//         description: "Add !voice-reveal shortcut to channel context menus",
+//         default: false
+//     },
+//     blockedUserIDs: {
+//         type: OptionType.STRING,
+//         description: "IDs of blocked users (comma-separated)",
+//         default: ""
+//     },
+//     moderatorUserConfig: {
+//         type: OptionType.STRING,
+//         description: "Moderator configuration (format: {\"<user id>\": [\"kick\", \"ban\", \"limit\", \"lock\", \"rename\"]})",
+//         default: "{}"
+//     }
+// });
 
-export default definePlugin({
-    name: "VoiceCommands",
-    description: "Adds context menu options for managing voice channels (!voice-kick, !voice-lock ...)",
-    authors: [{ name: "aequabit", id: 934357855853748264n }],
-    flux: {
-        VOICE_STATE_UPDATES: onVoiceStateUpdates,
-        MESSAGE_CREATE: onMessageCreate
-    },
-    settings,
-    contextMenus: {
-        "user-context": UserContextMenuPatch,
-        "channel-context": ChannelContextMenuPatch
-    },
-    async start() {
-        startTime = Date.now();
-    },
-});
+// let startTime = 0;
+
+// export default definePlugin({
+//     name: "VoiceCommands",
+//     description: "Adds context menu options for managing voice channels (!voice-kick, !voice-lock ...)",
+//     authors: [{ name: "aequabit", id: 934357855853748264n }],
+//     flux: {
+//         VOICE_STATE_UPDATES: onVoiceStateUpdates,
+//         MESSAGE_CREATE: onMessageCreate
+//     },
+//     settings,
+//     contextMenus: {
+//         "user-context": UserContextMenuPatch,
+//         "channel-context": ChannelContextMenuPatch
+//     },
+//     async start() {
+//         startTime = Date.now();
+//     },
+// });
