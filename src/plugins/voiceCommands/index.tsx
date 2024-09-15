@@ -17,45 +17,106 @@
 */
 
 import { NavContextMenuPatchCallback } from "@api/ContextMenu";
-import { MessageDecorations } from "@api/index";
 import { showNotification } from "@api/Notifications";
 import { definePluginSettings, Settings } from "@api/Settings";
 import { classNameFactory } from "@api/Styles";
-import { Grid } from "@components/Grid";
-import { Margins } from "@utils/margins";
 import { classes } from "@utils/misc";
 import { ModalContent, ModalFooter, ModalHeader, ModalProps, ModalRoot, ModalSize, openModalLazy } from "@utils/modal";
 import definePlugin, { OptionType } from "@utils/types";
 import { findByCodeLazy, findByPropsLazy, findComponentByCodeLazy, findLazy, findStoreLazy } from "@webpack";
-import { Button, ChannelStore, Clickable, Clipboard, ContextMenuApi, Forms, GuildMemberStore, GuildStore, Menu, MessageActions, MessageCache, MessageStore, RestAPI, ScrollerThin, SelectedChannelStore, SnowflakeUtils, Text, TextInput, Timestamp, Toasts, UserStore } from "@webpack/common";
+import { Button, ChannelStore, Clipboard, Forms, GuildMemberStore, GuildStore, Menu, MessageActions, MessageStore, PermissionsBits, RestAPI, SelectedChannelStore, SnowflakeUtils, Text, TextInput, Timestamp, Toasts, UserStore } from "@webpack/common";
 import { Channel, Message, User } from "discord-types/general";
-import messageDecorations from "plugins/_api/messageDecorations";
+import { PermissionType } from "plugins/permissionsViewer/components/RolesAndUsersPermissions";
+import { sortPermissionOverwrites } from "plugins/permissionsViewer/utils";
 import { PropsWithChildren } from "react";
-import { CallHangupIcon, CheckmarkIcon, EmptyIcon, UserWaveIcon } from "./icons";
-import { notify, sendMessage } from "./util";
 
 // TODO: -
+// - Fix transfer confirm
+// - Icons for permission context menu
 // - Show stream viewers at the bottom on private servers
 // - Build context menu conditions at beginning of function, not dynamically
-// - Determine channel owner by channel permissions
-// - Recognize commands simply containing a user ID instead of a full mention
 // - Sync server for permissions/commands
 //  - Also use for kick/ban actions instead of sending messages
-// - Detect owner using !voice-owner
-// - Don't display all events at once in event log
 // - Don't close context menu on permission check/uncheck
-// - Check/uncheck all permissions at
-// - Make blocking a check/uncheck option
-// - Only respond to commands by channel owner
-//  - Detect when possible (.find + match regex containing message and userid)
-//  - Select owner manually
-//  - Allow channel context options even if not in voice
 // - Queue bans if cooldown still in effect
 //  - Kick users until the cooldown expires
 //  - Calculate cooldown from failed commands
 
-// ??? API to detemine channel permissions
-// - complete anonymous (only hashes)
+type IconProps = JSX.IntrinsicElements["svg"];
+interface BaseIconProps extends IconProps {
+    viewBox: string;
+}
+function Icon({ height = 24, width = 24, className, children, viewBox, ...svgProps }: PropsWithChildren<BaseIconProps>) {
+    return (
+        <svg
+            className={classes(className, "vc-icon")}
+            role="img"
+            width={width}
+            height={height}
+            viewBox={viewBox}
+            {...svgProps}
+        >
+            {children}
+        </svg>
+    );
+}
+
+function UserWaveIcon({ height = 24, width = 24, className }: IconProps) {
+    return (
+        <Icon
+            height={height}
+            width={width}
+            className={classes(className, "vc-user-wave-icon")}
+            viewBox="0 0 24 24"
+        >
+            <g fill="none" fill-rule="evenodd">
+                <path fill="white" d="M13 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"></path><path fill="white" d="M3 5v-.75C3 3.56 3.56 3 4.25 3s1.24.56 1.33 1.25C6.12 8.65 9.46 12 13 12h1a8 8 0 0 1 8 8 2 2 0 0 1-2 2 .21.21 0 0 1-.2-.15 7.65 7.65 0 0 0-1.32-2.3c-.15-.2-.42-.06-.39.17l.25 2c.02.15-.1.28-.25.28H9a2 2 0 0 1-2-2v-2.22c0-1.57-.67-3.05-1.53-4.37A15.85 15.85 0 0 1 3 5Z"></path>
+            </g>
+        </Icon>
+    );
+}
+
+function CallHangupIcon({ height = 24, width = 24, className }: IconProps) {
+    return (
+        <Icon
+            height={height}
+            width={width}
+            className={classes(className, "vc-user-wave-icon")}
+            viewBox="0 0 24 24"
+        >
+            <g fill="none" fill-rule="evenodd">
+                <defs><clipPath id="__lottie_element_151"><rect width={width} height={height} x="0" y="0"></rect></clipPath><clipPath id="__lottie_element_153"><path d="M0,0 L600,0 L600,600 L0,600z"></path></clipPath></defs><g clip-path="url(#__lottie_element_151)"><g clip-path="url(#__lottie_element_153)" transform="matrix(0.03999999910593033,0,0,0.03999999910593033,0,0)" opacity="1" style={{ display: "block" }}><g transform="matrix(25,0,0,25,300,315)" opacity="1" style={{ display: "block" }}><g opacity="1" transform="matrix(1,0,0,1,0,-0.6100000143051147)"><path fill="white" fill-opacity="1" d=" M9.335000038146973,-1.8179999589920044 C4.184999942779541,-6.9670000076293945 -4.164000034332275,-6.9670000076293945 -9.312999725341797,-1.8179999589920044 C-11.690999984741211,0.5609999895095825 -11.35099983215332,3.6040000915527344 -9.555999755859375,5.39900016784668 C-9.300999641418457,5.6539998054504395 -8.909000396728516,5.7129998207092285 -8.59000015258789,5.544000148773193 C-8.59000015258789,5.544000148773193 -4.269999980926514,3.256999969482422 -4.269999980926514,3.256999969482422 C-3.871000051498413,3.0460000038146973 -3.683000087738037,2.5769999027252197 -3.8259999752044678,2.1489999294281006 C-3.8259999752044678,2.1489999294281006 -4.558000087738037,-0.04600000008940697 -4.558000087738037,-0.04600000008940697 C-1.8250000476837158,-1.9980000257492065 1.8459999561309814,-1.9980000257492065 4.578999996185303,-0.04600000008940697 C4.578999996185303,-0.04600000008940697 3.815000057220459,2.757999897003174 3.815000057220459,2.757999897003174 C3.693000078201294,3.2070000171661377 3.9240000247955322,3.677000045776367 4.354000091552734,3.8540000915527344 C4.354000091552734,3.8540000915527344 8.63599967956543,5.617000102996826 8.63599967956543,5.617000102996826 C8.946000099182129,5.744999885559082 9.303000450134277,5.672999858856201 9.539999961853027,5.435999870300293 C11.331999778747559,3.6440000534057617 11.708999633789062,0.5559999942779541 9.335000038146973,-1.8179999589920044z"></path></g></g></g></g>
+            </g>
+        </Icon >
+    );
+}
+
+function CheckmarkIcon({ height = 24, width = 24, className }: IconProps) {
+    return (
+        <Icon
+            height={height}
+            width={width}
+            className={classes(className, "vc-checkmark-icon")}
+            viewBox="0 0 24 24"
+        >
+            <g fill="none" fill-rule="evenodd">
+                <path fill="var(--white-500)" fill-rule="evenodd" d="M12 23a11 11 0 1 0 0-22 11 11 0 0 0 0 22Zm5.7-13.3a1 1 0 0 0-1.4-1.4L10 14.58l-2.3-2.3a1 1 0 0 0-1.4 1.42l3 3a1 1 0 0 0 1.4 0l7-7Z" clip-rule="evenodd" ></path>
+            </g>
+        </Icon>
+    );
+}
+
+function EmptyIcon({ height = 24, width = 24, className }: IconProps) {
+    return (
+        <Icon
+            height={height}
+            width={width}
+            className={classes(className, "vc-link-icon")}
+            viewBox="0 0 24 24"
+        >
+        </Icon>
+    );
+}
 
 interface UserContextProps {
     channel: Channel;
@@ -68,7 +129,9 @@ interface ChannelContextProps {
 }
 
 const ChannelTypes = findLazy(m => m.ANNOUNCEMENT_THREAD === 10);
-const VoiceStateStore = findStoreLazy("VoiceStateStore");
+const VoiceStateStore: { getVoiceStateForUser(userId: string): VoiceState | undefined; } = findStoreLazy("VoiceStateStore");
+const SortedVoiceStateStore = findByPropsLazy("getVoiceStatesForChannel");
+const cl = classNameFactory("vc-pindms-modal-");
 
 interface VoiceState {
     userId: string;
@@ -78,6 +141,47 @@ interface VoiceState {
     mute: boolean;
     selfDeaf: boolean;
     selfMute: boolean;
+}
+
+function sendMessage(channelId: string, content: string, messageReference?: string) {
+    RestAPI.post({
+        url: `/channels/${channelId}/messages`,
+        body: {
+            channel_id: channelId,
+            content: content,
+            nonce: SnowflakeUtils.fromTimestamp(Date.now()),
+            sticker_ids: [],
+            type: 0,
+            attachments: [],
+            message_reference: messageReference ? { message_id: messageReference } : null,
+        }
+    });
+}
+
+function _sendMessage(channelId: string, content: string, messageReference?: string) {
+    const msg = {
+        content,
+        tts: false,
+        invalidEmojis: [],
+        validNonShortcutEmojis: []
+    };
+
+    MessageActions._sendMessage(channelId, msg);
+}
+
+let _notifyAbort = false;
+export function notify(text: string, icon?: string, onClick?: () => void) {
+    // Trash
+    if (_notifyAbort) return;
+    _notifyAbort = true;
+    setTimeout(() => _notifyAbort = false, 2500);
+
+    showNotification({
+        title: "VoiceCommands",
+        body: text,
+        icon,
+        onClick
+    });
 }
 
 function getBlockedUsers(): string[] {
@@ -106,7 +210,8 @@ function unblockUser(userId: string) {
     Settings.plugins.VoiceCommands.blockedUserIDs = blockedUsers.join(",");
 }
 
-type UserModerationPermission = "kick" | "ban" | "limit" | "lock" | "rename" | "immunity";
+const UserModerationPermissions = ["kick", "ban", "limit", "lock", "rename", "immunity"] as const;
+type UserModerationPermission = typeof UserModerationPermissions[number];
 interface UserAttributeList { [key: string]: UserModerationPermission[]; }
 function getModeratorUsers(): UserAttributeList {
     const moderatorUserConfig = Settings.plugins.VoiceCommands?.moderatorUserConfig || "";
@@ -139,6 +244,12 @@ function userHasPermission(userId: string, permission: UserModerationPermission)
     return userPermissions && userPermissions.includes(permission);
 }
 
+function userHasAllPermissions(userId: string) {
+    const moderatorUsers = getModeratorUsers();
+    const userPermissions = moderatorUsers[userId];
+    return userPermissions && (userPermissions.length === UserModerationPermissions.length);
+}
+
 function userAddPermission(userId: string, permission: UserModerationPermission) {
     const moderatorUsers = getModeratorUsers();
     if (!moderatorUsers[userId]) moderatorUsers[userId] = [];
@@ -162,11 +273,34 @@ function userTogglePermission(userId: string, permission: UserModerationPermissi
         userRemovePermission(userId, permission);
 }
 
+function userToggleAllPermissions(userId: string) {
+    const moderatorUsers = getModeratorUsers();
+    const userPermissions = moderatorUsers[userId];
+
+    moderatorUsers[userId] = userPermissions && (userPermissions.length === UserModerationPermissions.length)
+        ? [] // Has all permissions, set to none
+        : [...UserModerationPermissions]; // Doesn't have all permissions , set all
+
+    setModeratorUsers(moderatorUsers);
+}
+
 function userIdFromTag(userTag: string): string | undefined {
-    const matches = /<@!?(\d+)>/g.exec(userTag);
+    // Valid inputs: <@!934357855853748264>, <@934357855853748264n>, <@934357855853748264n>, 934357855853748264
+    const matches = /(?:<@)?!?(\d+)(?:n?)>?/g.exec(userTag);
     if (!matches) return undefined;
-    if (isNaN(parseInt(matches[1]))) return undefined; // TODO: ???
     return matches[1];
+
+    // // This might be 20% faster (https://jsben.ch/csK79)
+    // if (userTag.startsWith("<@"))
+    //     userTag = userTag.substring(2);
+    // if (userTag.startsWith("!"))
+    //     userTag = userTag.substring(1);
+    // if (userTag.endsWith(">"))
+    //     userTag = userTag.substring(0, userTag.length - 1);
+    // if (userTag.endsWith("n"))
+    //     userTag = userTag.substring(0, userTag.length - 1);
+
+    // return userTag;
 }
 
 function userGetName(userId: string, guildId?: string): string {
@@ -179,112 +313,109 @@ function userGetName(userId: string, guildId?: string): string {
     return guildMember.nick || displayName;
 }
 
-const zentrumBotId = "1110336525176164452";
+function userInChannel(userId: string, channel: Channel) {
+    return voiceChannelStateGetMembers(channel)
+        .find(member => member.id === userId) !== undefined;
+}
 
-type VCMessagePattern = [
-    RegExp, // Message pattern
-    number, // Expected amount of match results
-    number // Index of the capture group containing the owner ID
-];
+function voiceChannelIsLocked(voiceChannel: Channel): boolean {
+    if (voiceChannel.type !== 2) return false; // Not a voice channel
 
-// TODO: Benchmark this against just splitting the string
-const VCMessagePatterns: VCMessagePattern[] = [
-    [/<@!?(\d+)>, du hast <@!?(\d+)> aus (?:dem|diesem) temporären Sprachkanal (?:gekickt|gebannt)/g, 2, 0],
-    [/<@!?(\d+)>, du hast diesen temporären Sprachkanal zu/g, 1, 0],
-    [/<@!?(\d+)>, du hast die Eigentumsrechte des temporären Sprachkanals auf <@!?(\d+)> übertragen/g, 2, 1],
-    [/<@!?(\d+)>, du hast das Nutzerlimit dieses temporären Sprachkanals zu/g, 1, 0]
-];
+    const roles = GuildStore.getRoles(voiceChannel.guild_id);
 
-function getOwnerUidFromMessage(message: string): string | null {
-    for (const pattern of VCMessagePatterns) {
-        const [regex, expectedMatches, index] = pattern;
+    const everyoneRoleOverwrite = Object.values(voiceChannel.permissionOverwrites).find(overwrite => {
+        const role = roles[overwrite.id];
+        return role && role.name && role.name === "@everyone";
+    });
 
-        const patternResult = regex.exec(message);
-        if (!patternResult) continue; // No match
-        if (patternResult.length - 1 !== expectedMatches) continue; // Invalid amount of matches
+    // No overwrites exist for @everyone
+    if (!everyoneRoleOverwrite) return false;
 
-        const ownerUid = patternResult[index + 1];
+    const everyoneConnectDenied = everyoneRoleOverwrite.deny
+        && (everyoneRoleOverwrite.deny & PermissionsBits.CONNECT) === PermissionsBits.CONNECT;
 
-        // Is transfer command, remove the owner that was set on channel creation
-        // TODO: Don't hardcode this (track transfers and ignore successful commands from non-owners)
-        if (pattern === VCMessagePatterns[1] || pattern === VCMessagePatterns[2]) {
-            console.log("REMOVE PRESET OWNER");
-            // Delete preset channel owner if it exists
-            channelOwners.delete(ownerUid);
-        }
+    return !!everyoneConnectDenied;
+}
 
-        return ownerUid;
+const voiceChannelStateGetMembers = (channel: Channel): User[] =>
+    SortedVoiceStateStore.getVoiceStatesForChannel(channel)
+        .map(voiceState => voiceState.user);
+
+const voiceChannelStateGetOwner = (voiceChannel: Channel): string | undefined =>
+    voiceChannelStateGetMembers(voiceChannel)
+        .find(user => user && voiceChannelIsOwner(voiceChannel, user.id))
+        ?.id;
+
+function parseSlotCount(countString: string, currentSlots: number): number | undefined {
+    let strippedCountString = countString;
+    if (countString.startsWith("+") || countString.startsWith("-")) {
+        if (countString.length < 2) return; // No number after the prefix
+        strippedCountString = countString.substring(0, 1);
     }
 
-    return null;
+    const count = parseInt(strippedCountString, 10);
+    if (isNaN(count)) return;
+
+    // Length changed due to stripped operator, add slot count to existing one
+    if (countString.length !== strippedCountString.length)
+        return currentSlots + count;
+
+    return count;
 }
 
-const channelOwners = new Map<string, string>();
-
-function setChannelOwner(channelId: string, userId: string) {
-    channelOwners.set(channelId, userId);
-}
-
-function getBotMessageContent(message: Message): string | undefined {
-    if (!message.author || !message.author.id) return;
-
-    // TODO: Don't do this
-    if (message.author.id !== zentrumBotId) return;
-
-    // Check for the bot message embed
-    if (!message.embeds || message.embeds.length === 0) return;
-    if (!message.embeds[0] || !message.embeds[0].rawDescription) return;
-
-    return message.embeds[0].rawDescription;
-}
-
-function getChannelOwnerUid(channelId: string): string | null {
-    const manuallySetUid = channelOwners.get(channelId);
-    if (manuallySetUid) return manuallySetUid;
-
-    const channelMessages = MessageStore.getMessages(channelId);
-    if (!channelMessages || !channelMessages.toArray) return null;
-
-    for (const message of channelMessages.toArray()) {
-        const botMessage = getBotMessageContent(message);
-        if (!botMessage) continue;
-
-        const ownerUid = getOwnerUidFromMessage(botMessage);
-        if (!ownerUid) continue;
-
-        // Found owner UID
-        return ownerUid;
-
-        // for (const scanner of channelMessageScanners) {
-        //     const patternResult = scanner.pattern.exec(botMessage);
-        //     if (!patternResult) continue;
-        //     const ownerUserId = scanner.parser(patternResult);
-        //     console.log("  owner: ", ownerUserId);
-        //     console.log("  pattern: ", scanner.pattern.source);
-        // }
-
-        // @Gesocksbeseitigungsminister, du hast @Miri Egirl aus dem temporären Sprachkanal gekickt.
-        // @Gesocksbeseitigungsminister, du hast @Miri Egirl aus dem temporären Sprachkanal gekickt.
-        // if (!message.)
-    }
-
-    // console.log(MessageCache._channelMessages);
-    return null;
-}
-
+// TODO: Log bot commands and actions (i.e. show leave reason for kicks/bans)
+// TODO: ^ show warning if parsing channel chat isn't possible
 type VoiceChannelEvent = { type: "join" | "leave"; at: number; userId: string; };
 type VoiceChannelEventLog = { [channelId: string]: VoiceChannelEvent[]; };
-let voiceChannelEvents: VoiceChannelEventLog = {};
+const voiceChannelEvents: VoiceChannelEventLog = {};
 
 type UserVoiceStateLog = { [userId: string]: (string | undefined)[]; };
-let userVoiceStateLog: UserVoiceStateLog = {};
+const userVoiceStateLog: UserVoiceStateLog = {};
+
+let startTime: number | undefined = undefined;
+
+function voiceChannelGetOwner(channel: Channel): string | undefined {
+    if (!channel.permissionOverwrites) return;
+
+    const ownerPermissionOverwrites = Object.values(channel.permissionOverwrites)
+        .find(overwrites => {
+            if (!UserStore.getUser(overwrites.id)) return false;
+            // These are set for channel owners on HBF and Zentrum
+            return overwritesHavePermissions(overwrites, [PermissionsBits.VIEW_CHANNEL, PermissionsBits.CONNECT]);
+        });
+
+    if (ownerPermissionOverwrites)
+        return ownerPermissionOverwrites.id;
+}
+
+function overwritesHavePermissions(overwrites: Channel["permissionOverwrites"]["role"], permissions: bigint[]): boolean {
+    if (!overwrites.allow) return false;
+
+    for (const permission of permissions) {
+        if ((overwrites.allow & permission) !== permission)
+            return false;
+    }
+
+    return true;
+}
+
+function voiceChannelIsOwner(channel: Channel, userId: string): boolean {
+    if (!channel.permissionOverwrites || !channel.permissionOverwrites[userId]) return false;
+    const userPermissionOverwrites = channel.permissionOverwrites[userId];
+    if (!userPermissionOverwrites) return false;
+
+    const userHasJoinPermission = userPermissionOverwrites.allow
+        && (userPermissionOverwrites.allow & PermissionsBits.CONNECT) === PermissionsBits.CONNECT;
+
+    return !!userHasJoinPermission;
+}
 
 const onVoiceStateUpdates = ({ voiceStates }: { voiceStates: VoiceState[]; }) => {
     const me = UserStore.getCurrentUser();
 
     // Event logging
-    for (const state of voiceStates) {
-        const { userId, channelId, oldChannelId } = state;
+    for (const voiceState of voiceStates) {
+        const { userId, channelId, oldChannelId } = voiceState;
 
         // Log user channel join
         if (!userVoiceStateLog[userId]) userVoiceStateLog[userId] = [];
@@ -292,12 +423,16 @@ const onVoiceStateUpdates = ({ voiceStates }: { voiceStates: VoiceState[]; }) =>
 
         const voiceStateLog = userVoiceStateLog[userId];
 
-        let realOldChannelId: string | undefined = undefined;
         // For some reason oldChannelId is always the same as channelId when switching from one channel to another
-        // Try to get the previous channel from our own log
+        let realOldChannelId: string | undefined = undefined;
         if (voiceStateLog.length > 1) {
             realOldChannelId = voiceStateLog[voiceStateLog.length - 2];
         }
+
+        const _user = UserStore.getUser(userId).username;
+        const _channel = channelId ? ChannelStore.getChannel(channelId).name : "<null>";
+        const _oldChannel = realOldChannelId ? ChannelStore.getChannel(realOldChannelId).name : "<null>";
+        // console.log(`USER=${_user} CHANNEL=${_channel} OLDCHANNEL=${_oldChannel}`);
 
         if (realOldChannelId !== undefined) {
             if (!voiceChannelEvents[realOldChannelId])
@@ -314,12 +449,12 @@ const onVoiceStateUpdates = ({ voiceStates }: { voiceStates: VoiceState[]; }) =>
         }
     }
 
-
     // Get our current voice state of the selected user
     const userVoiceState = VoiceStateStore.getVoiceStateForUser(me.id);
     if (!userVoiceState) return;
 
     const voiceChannelId = userVoiceState.channelId;
+    if (!voiceChannelId) return;
 
     // Get voice channel
     const channel = ChannelStore.getChannel(voiceChannelId);
@@ -327,47 +462,24 @@ const onVoiceStateUpdates = ({ voiceStates }: { voiceStates: VoiceState[]; }) =>
 
     if (channel.type === 13) return; // Ignore Stage Channels
 
-    //determineChannelOwner(channel.id);
+    // It's our channel
+    if (voiceChannelIsOwner(channel, me.id)) {
+        // Blocklist check
+        for (const state of voiceStates) {
+            const { userId, channelId, oldChannelId } = state;
 
-    // Blocklist check
-    for (const state of voiceStates) {
-        const { userId, channelId, oldChannelId } = state;
+            if (channelId !== voiceChannelId) continue; // User is not in our channel
 
-        const userInChannel = channelId !== undefined;
-        const userOldChannel = channelId !== undefined;
-
-        if (channelId !== voiceChannelId) continue; // User is not in our channel
-
-        // It's us
-        if (userId === me.id) {
-            if (!oldChannelId) continue;
-            const oldChannel = ChannelStore.getChannel(oldChannelId);
-            if (!oldChannel) continue;
-
-            // TODO: Don't hardcode this
-            const oldChannelIsLobby = oldChannel.name.includes("Voice erstellen") || oldChannel.name.includes("Kanal erstellen");
-            if (!oldChannelIsLobby) continue;
-            type UserEx = User & { globalName: string; };
-            if (channel.name === `${(me as UserEx).globalName}'s Channel` ||
-                channel.name === `${(me as UserEx).globalName}s Kanal` ||
-                channel.name === `${me.username}'s Channel` ||
-                channel.name === `${me.username}s Kanal`
-            ) {
-                setChannelOwner(channel.id, me.id);
-
-                console.log("CHANNEL CREATED: " + channel.name);
+            // User is blocked and blocking is enabled
+            if (Settings.plugins.VoiceCommands.voiceBlock && getBlockedUsers().includes(userId)) {
+                sendMessage(voiceChannelId, `!voice-ban <@${userId}>`);
             }
-        }
-
-        // User is blocked and blocking is enabled
-        if (Settings.plugins.VoiceCommands.voiceBlock && getBlockedUsers().includes(userId)) {
-            sendMessage(voiceChannelId, `!voice-ban <@${userId}>`);
         }
     }
 };
 
 const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic: boolean; }) => {
-    //if (optimistic) return;
+    // if (optimistic) return;
     const messageChannel = ChannelStore.getChannel(message.channel_id);
 
     const me = UserStore.getCurrentUser();
@@ -375,34 +487,29 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
     if (!myVoiceState) return;
 
     if (messageChannel.type !== 2) return; // Not a voice channel
-    if (messageChannel.id !== myVoiceState.channelId) return; // Not our voice channel
 
-    let content = message.content;
+    // Not our channel
+    if (!voiceChannelIsOwner(messageChannel, me.id)) return;
+
+    let { content } = message;
 
     // Shortcuts
-    // TODO: Don't check this here
+    // TODO: Don't check this here, maybe make configurable?
     if (content.startsWith(".k ")) content = content.replace(".k ", "!voice-kick ");
     if (content.startsWith(".b ")) content = content.replace(".b ", "!voice-ban ");
-    if (content.startsWith(".lmt ")) {
-        console.log("LMT", content);
-        content = content.replace(".lmt ", "!voice-limit ");
-    }
-
-    if (content.startsWith(".msg")) {
-        console.log(channelOwners);
-        const channelOwnerUid = getChannelOwnerUid(messageChannel.id);
-        if (!channelOwnerUid) {
-            console.log("No owner found");
-            return;
-        }
-
-        console.log(`Channel ${messageChannel.name} is owned by ${userGetName(channelOwnerUid, messageChannel.guild_id)}`);
-        return;
-    }
+    if (content.startsWith(".lmt ")) content = content.replace(".lmt ", "!voice-limit ");
 
     if (message.author.id === me.id) return; // Message was sent by us
 
     const userModeratorPermissions = getModeratorUsers()[message.author.id];
+
+    if (content.startsWith(".permissions")) {
+        if (!userModeratorPermissions)
+            return sendMessage(messageChannel.id, "You are not a moderator", message.id);
+
+        return sendMessage(messageChannel.id, `Your permissions: ${userModeratorPermissions.join(", ")}`, message.id);
+    }
+
     if (!userModeratorPermissions) return; // Sender is not a moderator
 
     const messageParts = content
@@ -417,6 +524,7 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
     let permissionName = command;
     if (command === "unban") permissionName = "ban"; // Shitty hack
     if (command === "unlock") permissionName = "lock"; // Shitty hack
+    if (!userModeratorPermissions.includes(permissionName as UserModerationPermission)) return; // No permissions for command
 
     if (["ban", "unban", "kick", "limit", "rename"].includes(command))
         if (messageParts.length < 2) return; // Command argument missing
@@ -428,10 +536,7 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
         if (!userModeratorPermissions) return;
 
         // No user ID provided, get the message author's permissions
-        if (!commandArg) {
-            sendMessage(messageChannel.id, `Your permissions: ${userModeratorPermissions.join(", ")}`, message.id);
-            return;
-        }
+        if (!commandArg) return sendMessage(messageChannel.id, `Your permissions: ${userModeratorPermissions.join(", ")}`, message.id);
 
         const userId = userIdFromTag(commandArg);
         if (!userId) return;
@@ -441,109 +546,133 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
             sendMessage(messageChannel.id, "I own the channel", message.id);
         }
 
+        // User doesn't have any permissions
         const userPermissions = userGetPermissions(userId);
-        if (!userPermissions) {
-            sendMessage(messageChannel.id, `${userGetName(userId)} is not a moderator`, message.id);
-            return;
-        }
+        if (!userPermissions) return sendMessage(messageChannel.id, `${userGetName(userId)} is not a moderator`, message.id);
 
-        sendMessage(messageChannel.id, `Permissions: ${userPermissions.join(", ")}`, message.id);
-        return;
+        return sendMessage(messageChannel.id, `Permissions: ${userPermissions.join(", ")}`, message.id);
     }
 
-    if (!userModeratorPermissions.includes(permissionName as UserModerationPermission)) return; // No permissions for command
+    // No permissions for command
+    if (!userModeratorPermissions.includes(permissionName as UserModerationPermission)) return;
 
     // User tag is invalid
     if (["ban", "unban", "kick"].includes(command)) {
-        // TODO: Replace with userIdFromTag
-        const userId = commandArg.replace(">", "").replace("<@", "");
-        if (userId === commandArg) return; // No tags were present in the first place
-        if (isNaN(parseInt(userId))) return; // User ID is not a valid number
+        const userId = userIdFromTag(commandArg);
+        if (!userId) return;
 
-        // Target is another moderator
-        if (command !== "unban" && Settings.plugins.VoiceCommands.voiceModeratorImmunity && userIsModerator(userId)) {
-            sendMessage(messageChannel.id, "Cannot kick or ban other moderators", message.id);
-            return;
+        // Kick or ban
+        if (command !== "unban") {
+            // Target is us
+            if (userId === me.id)
+                return sendMessage(messageChannel.id, "Cannot kick or ban the channel owner", message.id);
+
+            // Moderator immunity
+            if (Settings.plugins.VoiceCommands.voiceModeratorImmunity && userIsModerator(userId))
+                return sendMessage(messageChannel.id, "Cannot kick or ban other moderators", message.id);
         }
     }
 
-    // TODO: + -
-
-    // Limit argument is not a valid number
-    if (command === "limit" && isNaN(parseInt(commandArg))) return;
+    // TODO: Accept +/- prefix and calculate the slot count the bot is then given
+    if (command === "limit") {
+        const newSlotCount = parseSlotCount(commandArg, messageChannel.userLimit);
+        if (!newSlotCount) return sendMessage(messageChannel.id, content);
+        content = `!voice-limit ${newSlotCount}`;
+    }
 
     // Channel name argument is too short or too long
-    if (command === "rename" && commandArg.length < 1 || commandArg.length > 99) return;
+    if (command === "rename" && commandArg.length < 1 || commandArg.length > 99)
+        return sendMessage(messageChannel.id, "Channel names must be between 1 and 99 characters long", message.id);
 
     sendMessage(messageChannel.id, content);
 };
 
 const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: UserContextProps) => {
-    if (!user || user.id === UserStore.getCurrentUser().id) return;
+    const me = UserStore.getCurrentUser();
+    if (!user || user.id === me.id) return;
 
-    // Get our current voice channel
-    const voiceChannelId = SelectedChannelStore.getVoiceChannelId();
-    const amInVoice = !!voiceChannelId;
+    // Get our voice state and channel
+    const myVoiceState = VoiceStateStore.getVoiceStateForUser(me.id);
+    let myVoiceChannel: Channel | undefined = undefined;
+    let amChannelOwner = false;
+    if (myVoiceState && myVoiceState.channelId) {
+        myVoiceChannel = ChannelStore.getChannel(myVoiceState.channelId);
+        amChannelOwner = voiceChannelIsOwner(myVoiceChannel, me.id);
+    }
 
-    // Get voice state of the selected user
+    // Get the target user's voice state and channel
     const userVoiceState = VoiceStateStore.getVoiceStateForUser(user.id);
-    const userInVoice = !!userVoiceState;
-    const userInMyVoice = userInVoice && userVoiceState.channelId === voiceChannelId;
+    let userVoiceChannel: Channel | undefined = undefined;
+    // let userIsChannelOwner = false;
 
-    if (amInVoice && userInMyVoice && settings.store.voiceKick)
+    // Try to locate user within our channel
+    if (myVoiceChannel && userInChannel(user.id, myVoiceChannel)) {
+        userVoiceChannel = myVoiceChannel;
+        // userIsChannelOwner = voiceChannelIsOwner(userVoiceChannel, user.id);
+    }
+    // Try to get him by voice state instead
+    else if (userVoiceState && userVoiceState.channelId) {
+        userVoiceChannel = ChannelStore.getChannel(userVoiceState.channelId);
+        // userIsChannelOwner = voiceChannelIsOwner(userVoiceChannel, user.id);
+    }
+
+    const userInMyVoice = myVoiceChannel?.id === userVoiceChannel?.id;
+
+    if (amChannelOwner && myVoiceChannel && userInMyVoice && settings.store.voiceKick)
         children.push(
             <Menu.MenuItem
                 id="vc-kick-user"
                 label="Kick user"
-                action={() => sendMessage(voiceChannelId, `!voice-kick <@${user.id}>`)}
+                action={() => sendMessage(myVoiceChannel!.id, `!voice-kick <@${user.id}>`)}
             />
         );
 
-    if (amInVoice && userInMyVoice && settings.store.voiceBan)
+    if (amChannelOwner && myVoiceChannel && userInMyVoice && settings.store.voiceBan)
         children.push(
             <Menu.MenuItem
                 id="vc-ban-user"
                 label="Ban user"
-                action={() => sendMessage(voiceChannelId, `!voice-ban <@${user.id}>`)}
+                action={() => sendMessage(myVoiceChannel!.id, `!voice-ban <@${user.id}>`)}
             />
         );
 
-    if (amInVoice && settings.store.voiceUnban)
+    if (amChannelOwner && myVoiceChannel && settings.store.voiceUnban)
         children.push(
             <Menu.MenuItem
                 id="vc-unban-user"
                 label="Unban user"
-                action={() => sendMessage(voiceChannelId, `!voice-unban <@${user.id}>`)}
+                action={() => sendMessage(myVoiceChannel!.id, `!voice-unban <@${user.id}>`)}
             />
         );
 
-    if (settings.store.voiceBlock)
-        children.push(
-            <Menu.MenuItem
-                id="vc-block-user"
-                label="Block user"
-                action={() => blockUser(user.id)}
-            />
-        );
+    if (settings.store.voiceBlock) {
+        if (getBlockedUsers().includes(user.id))
+            children.push(
+                <Menu.MenuItem
+                    id="vc-unblock-user"
+                    label="Unblock user"
+                    action={() => unblockUser(user.id)}
+                />
+            );
+        else
+            children.push(
+                <Menu.MenuItem
+                    id="vc-block-user"
+                    label="Block user"
+                    action={() => blockUser(user.id)}
+                />
+            );
+    }
 
-    if (settings.store.voiceUnblock)
-        children.push(
-            <Menu.MenuItem
-                id="vc-unblock-user"
-                label="Unblock user"
-                action={() => unblockUser(user.id)}
-            />
-        );
-
-    if (amInVoice && userInMyVoice && settings.store.voiceTransfer)
+    if (amChannelOwner && myVoiceChannel && userInMyVoice && settings.store.voiceTransfer)
         children.push(
             <Menu.MenuItem
                 id="vc-transfer"
                 label="Transfer voice channel"
                 action={
                     () => settings.store.voiceTransferConfirm
-                        ? openChannelTransferConfirmModal(user.id, voiceChannelId)
-                        : sendMessage(voiceChannelId, `!voice-transfer <@${user.id}>`)
+                        ? openChannelTransferConfirmModal(user.id, myVoiceChannel!.id)
+                        : sendMessage(myVoiceChannel!.id, `!voice-transfer <@${user.id}>`)
                 }
             />
         );
@@ -554,6 +683,12 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
                 id="vc-user-permissions"
                 label="Permissions"
             >
+                <Menu.MenuItem
+                    id="vc-user-perm-toggle-all"
+                    label="Toggle all"
+                    action={() => userToggleAllPermissions(user.id)}
+                    icon={userHasAllPermissions(user.id) ? CheckmarkIcon : EmptyIcon}
+                />
                 <Menu.MenuItem
                     id="vc-user-perm-kick"
                     label="Kick users"
@@ -595,23 +730,27 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
     }
 };
 
+const DEBUG_ENABLE = true;
+function debug(message: string): void {
+    if (DEBUG_ENABLE) console.log(`VoiceCommands: ${message}`);
+}
+
 const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channel }: ChannelContextProps) => {
-    if (!channel) return;
+    if (!channel) return debug("!channel");
 
     // Ignore non-voice channels
     if (channel.type !== 2) return;
 
     // Get our current voice channel
-    const voiceChannelId = SelectedChannelStore.getVoiceChannelId();
+    const myVoiceChannelId = SelectedChannelStore.getVoiceChannelId();
+    const myVoiceChannel = myVoiceChannelId ? ChannelStore.getChannel(myVoiceChannelId) : undefined;
 
-    // Get voice state of the selected user
-    const userVoiceState = VoiceStateStore.getVoiceStateForUser(UserStore.getCurrentUser().id);
-    if (!userVoiceState) return;
+    // Get our voice state
+    const me = UserStore.getCurrentUser();
+    const myVoiceState = VoiceStateStore.getVoiceStateForUser(me.id);
 
-    // No voice channel or not the current one
-    if (!voiceChannelId || userVoiceState.channelId !== voiceChannelId) return;
-
-    const voiceChannel = ChannelStore.getChannel(voiceChannelId);
+    const amChannelOwner = voiceChannelIsOwner(channel, me.id);
+    const amInChannel = myVoiceState?.channelId === channel.id;
 
     if (settings.store.voiceEventLog) {
         children.push(
@@ -623,7 +762,7 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
         );
     }
 
-    if (settings.store.voiceLimit) {
+    if (amChannelOwner && amInChannel && settings.store.voiceLimit) {
         const userLimitOptionElements: JSX.Element[] = [];
         userLimitOptionElements.push(
             <Menu.MenuItem
@@ -668,7 +807,7 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
         );
     }
 
-    if (settings.store.voiceRename) {
+    if (amChannelOwner && amInChannel && settings.store.voiceRename) {
         if (settings.store.voiceRenamePresets.length > 0) {
             const ESCAPE_SEQUENCE = "#$#COMMA#$#";
             const voiceRenamePresets = settings.store.voiceRenamePresets
@@ -713,8 +852,10 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
         }
     }
 
+    const channelOwner = voiceChannelGetOwner(channel);
+    const ownerInChannel = channelOwner && userInChannel(channelOwner, channel);
 
-    if (settings.store.voiceClaim)
+    if (!amChannelOwner && amInChannel && !ownerInChannel && settings.store.voiceClaim)
         children.push(
             <Menu.MenuItem
                 id="vc-claim"
@@ -723,25 +864,26 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
             />
         );
 
-    if (settings.store.voiceLock)
-        children.push(
-            <Menu.MenuItem
-                id="vc-lock"
-                label="Lock channel"
-                action={() => sendMessage(channel.id, "!voice-lock")}
-            />
-        );
+    if (amChannelOwner && amInChannel && settings.store.voiceLock) {
+        if (voiceChannelIsLocked(myVoiceChannel!))
+            children.push(
+                <Menu.MenuItem
+                    id="vc-unlock"
+                    label="Unlock channel"
+                    action={() => sendMessage(channel.id, "!voice-unlock")}
+                />
+            );
+        else
+            children.push(
+                <Menu.MenuItem
+                    id="vc-lock"
+                    label="Lock channel"
+                    action={() => sendMessage(channel.id, "!voice-lock")}
+                />
+            );
+    }
 
-    if (settings.store.voiceUnlock)
-        children.push(
-            <Menu.MenuItem
-                id="vc-unlock"
-                label="Unlock channel"
-                action={() => sendMessage(channel.id, "!voice-unlock")}
-            />
-        );
-
-    if (settings.store.voiceHide)
+    if (amChannelOwner && amInChannel && settings.store.voiceHide)
         children.push(
             <Menu.MenuItem
                 id="vc-hide"
@@ -750,7 +892,7 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
             />
         );
 
-    if (settings.store.voiceReveal)
+    if (amChannelOwner && amInChannel && settings.store.voiceReveal)
         children.push(
             <Menu.MenuItem
                 id="vc-reveal"
@@ -797,8 +939,8 @@ export function VoiceChannelEventsModal({ modalProps, voiceChannelId }: VoiceCha
 
     const createListItem = (ev: VoiceChannelEvent) => {
         const user = UserStore.getUser(ev.userId);
-        console.log("EV USER", user);
-        // TODO: Check fo user existence (add placeholder if undefined)
+
+        // TODO: Check for user existence (add placeholder if undefined)
         // TODO: Use user context menu instead of onClick copy handler
         return (
             <div className="auditLog_eebd33 row_cfe282" style={{ marginBottom: "8px" }} onClick={() => copyUserName(user.id)}>
@@ -861,6 +1003,7 @@ export function VoiceChannelEventsModal({ modalProps, voiceChannelId }: VoiceCha
         );
     };
 
+    // TODO: Don't display all events at once
     return (
         <ModalRoot {...modalProps} size={ModalSize.DYNAMIC}>
             <ModalHeader>
@@ -1035,125 +1178,118 @@ export const openChannelTransferConfirmModal = (userId: string, channelId: strin
         </ConfirmModal >;
     });
 
-// const settings = definePluginSettings({
-//     voiceKick: {
-//         type: OptionType.BOOLEAN,
-//         description: "Add !voice-kick shortcut to user context menus",
-//         default: true
-//     },
-//     voiceBan: {
-//         type: OptionType.BOOLEAN,
-//         description: "Add !voice-ban shortcut to user context menus",
-//         default: true
-//     },
-//     voiceUnban: {
-//         type: OptionType.BOOLEAN,
-//         description: "Add !voice-unban shortcut to user context menus",
-//         default: true
-//     },
-//     voiceBlock: {
-//         type: OptionType.BOOLEAN,
-//         description: "Adds the option to block a user to context menus",
-//         default: false
-//     },
-//     voiceUnblock: {
-//         type: OptionType.BOOLEAN,
-//         description: "Adds the option to unblock a user to context menus",
-//         default: false
-//     },
-//     voiceTransfer: {
-//         type: OptionType.BOOLEAN,
-//         description: "Add !voice-transfer shortcut to user context menus",
-//         default: true
-//     },
-//     voiceTransferConfirm: {
-//         type: OptionType.BOOLEAN,
-//         description: "Whether to confirm voice channel transfers",
-//         default: true
-//     },
-//     voiceModeration: {
-//         type: OptionType.BOOLEAN,
-//         description: "Add context menu options to assign moderation permissions",
-//         default: true
-//     },
-//     voiceModeratorImmunity: {
-//         type: OptionType.BOOLEAN,
-//         description: "Whether to make users with at least one moderation permission immune to kicks and bans by other moderators",
-//         default: true
-//     },
-//     voiceEventLog: {
-//         type: OptionType.BOOLEAN,
-//         description: "Add event logs to voice channel context menus",
-//         default: true
-//     },
-//     voiceLimit: {
-//         type: OptionType.BOOLEAN,
-//         description: "Add !voice-limit shortcut to channel context menus",
-//         default: true
-//     },
-//     voiceRename: {
-//         type: OptionType.BOOLEAN,
-//         description: "Add !voice-rename shortcut to channel context menus",
-//         default: true
-//     },
-//     voiceRenamePresets: {
-//         type: OptionType.STRING,
-//         description: "Preset names to show in the rename menu (comma-separated, escape commas using \\,)",
-//         default: ""
-//     },
-//     voiceClaim: {
-//         type: OptionType.BOOLEAN,
-//         description: "Add !voice-claim shortcut to channel context menus",
-//         default: true
-//     },
-//     voiceLock: {
-//         type: OptionType.BOOLEAN,
-//         description: "Add !voice-lock shortcut to channel context menus",
-//         default: true
-//     },
-//     voiceUnlock: {
-//         type: OptionType.BOOLEAN,
-//         description: "Add !voice-unlock shortcut to channel context menus",
-//         default: true
-//     },
-//     voiceHide: {
-//         type: OptionType.BOOLEAN,
-//         description: "Add !voice-hide shortcut to channel context menus",
-//         default: false
-//     },
-//     voiceReveal: {
-//         type: OptionType.BOOLEAN,
-//         description: "Add !voice-reveal shortcut to channel context menus",
-//         default: false
-//     },
-//     blockedUserIDs: {
-//         type: OptionType.STRING,
-//         description: "IDs of blocked users (comma-separated)",
-//         default: ""
-//     },
-//     moderatorUserConfig: {
-//         type: OptionType.STRING,
-//         description: "Moderator configuration (format: {\"<user id>\": [\"kick\", \"ban\", \"limit\", \"lock\", \"rename\"]})",
-//         default: "{}"
-//     }
-// });
+const settings = definePluginSettings({
+    voiceKick: {
+        type: OptionType.BOOLEAN,
+        description: "Add !voice-kick shortcut to user context menus",
+        default: true
+    },
+    voiceBan: {
+        type: OptionType.BOOLEAN,
+        description: "Add !voice-ban shortcut to user context menus",
+        default: true
+    },
+    voiceUnban: {
+        type: OptionType.BOOLEAN,
+        description: "Add !voice-unban shortcut to user context menus",
+        default: true
+    },
+    voiceBlock: {
+        type: OptionType.BOOLEAN,
+        description: "Adds the option to block/unblock a user to context menus",
+        default: false
+    },
+    voiceTransfer: {
+        type: OptionType.BOOLEAN,
+        description: "Add !voice-transfer shortcut to user context menus",
+        default: true
+    },
+    voiceTransferConfirm: {
+        type: OptionType.BOOLEAN,
+        description: "Whether to confirm voice channel transfers",
+        default: true
+    },
+    voiceModeration: {
+        type: OptionType.BOOLEAN,
+        description: "Add context menu options to assign moderation permissions",
+        default: true
+    },
+    voiceModeratorImmunity: {
+        type: OptionType.BOOLEAN,
+        description: "Whether to make users with at least one moderation permission immune to kicks and bans by other moderators",
+        default: true
+    },
+    voiceEventLog: {
+        type: OptionType.BOOLEAN,
+        description: "Add event logs to voice channel context menus",
+        default: true
+    },
+    voiceLimit: {
+        type: OptionType.BOOLEAN,
+        description: "Add !voice-limit shortcut to channel context menus",
+        default: true
+    },
+    voiceRename: {
+        type: OptionType.BOOLEAN,
+        description: "Add !voice-rename shortcut to channel context menus",
+        default: true
+    },
+    voiceRenamePresets: {
+        type: OptionType.STRING,
+        description: "Preset names to show in the rename menu (comma-separated, escape commas using \\,)",
+        default: ""
+    },
+    voiceClaim: {
+        type: OptionType.BOOLEAN,
+        description: "Add !voice-claim shortcut to channel context menus",
+        default: true
+    },
+    voiceLock: {
+        type: OptionType.BOOLEAN,
+        description: "Add !voice-lock shortcut to channel context menus",
+        default: true
+    },
+    voiceUnlock: {
+        type: OptionType.BOOLEAN,
+        description: "Add !voice-unlock shortcut to channel context menus",
+        default: true
+    },
+    voiceHide: {
+        type: OptionType.BOOLEAN,
+        description: "Add !voice-hide shortcut to channel context menus",
+        default: false
+    },
+    voiceReveal: {
+        type: OptionType.BOOLEAN,
+        description: "Add !voice-reveal shortcut to channel context menus",
+        default: false
+    },
+    blockedUserIDs: {
+        type: OptionType.STRING,
+        description: "IDs of blocked users (comma-separated)",
+        default: ""
+    },
+    moderatorUserConfig: {
+        type: OptionType.STRING,
+        description: "Moderator configuration (format: {\"<user id>\": [\"kick\", \"ban\", \"limit\", \"lock\", \"rename\"]})",
+        default: "{}"
+    }
+});
 
-// let startTime = 0;
-
-// export default definePlugin({
-//     name: "VoiceCommands",
-//     description: "Adds context menu options for managing voice channels (!voice-kick, !voice-lock ...)",
-//     authors: [{ name: "aequabit", id: 934357855853748264n }],
-//     flux: {
-//         VOICE_STATE_UPDATES: onVoiceStateUpdates,
-//         MESSAGE_CREATE: onMessageCreate
-//     },
-//     settings,
-//     contextMenus: {
-//         "user-context": UserContextMenuPatch,
-//         "channel-context": ChannelContextMenuPatch
-//     },
-//     async start() {
-//         startTime = Date.now();
-//     },
-// });
+export default definePlugin({
+    name: "VoiceCommands",
+    description: "Adds context menu options for managing voice channels (!voice-kick, !voice-lock ...)",
+    authors: [{ name: "aequabit", id: 934357855853748264n }],
+    flux: {
+        VOICE_STATE_UPDATES: onVoiceStateUpdates,
+        MESSAGE_CREATE: onMessageCreate
+    },
+    settings,
+    contextMenus: {
+        "user-context": UserContextMenuPatch,
+        "channel-context": ChannelContextMenuPatch
+    },
+    async start() {
+        startTime = Date.now();
+    },
+});
