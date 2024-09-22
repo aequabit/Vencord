@@ -26,8 +26,6 @@ import definePlugin, { OptionType } from "@utils/types";
 import { findByCodeLazy, findByPropsLazy, findComponentByCodeLazy, findLazy, findStoreLazy } from "@webpack";
 import { Button, ChannelStore, Clipboard, Forms, GuildMemberStore, GuildStore, Menu, MessageActions, MessageStore, PermissionsBits, RestAPI, SelectedChannelStore, SnowflakeUtils, Text, TextInput, Timestamp, Toasts, UserStore } from "@webpack/common";
 import { Channel, Message, User } from "discord-types/general";
-import { PermissionType } from "plugins/permissionsViewer/components/RolesAndUsersPermissions";
-import { sortPermissionOverwrites } from "plugins/permissionsViewer/utils";
 import { PropsWithChildren } from "react";
 
 // TODO: -
@@ -462,6 +460,16 @@ const onVoiceStateUpdates = ({ voiceStates }: { voiceStates: VoiceState[]; }) =>
 
     if (channel.type === 13) return; // Ignore Stage Channels
 
+    // Scan messages for permission info
+    const channelMessages = MessageStore.getMessages(voiceChannelId);
+    if (channelMessages && channelMessages.toArray) {
+        for (const message of channelMessages.toArray().reverse()) {
+            if (message.content && message.content.startsWith("Your permissions: ")) {
+                evaluateChannelPermissions(message);
+                break;
+            }
+        }
+    }
     // It's our channel
     if (voiceChannelIsOwner(channel, me.id)) {
         // Blocklist check
@@ -478,6 +486,32 @@ const onVoiceStateUpdates = ({ voiceStates }: { voiceStates: VoiceState[]; }) =>
     }
 };
 
+// TODO: Don't do this here
+type LocalChannelPermissions = { [channelId: string]: UserModerationPermission[]; };
+const localChannelPermissions: LocalChannelPermissions = {};
+
+function evaluateChannelPermissions(message: Message) {
+    const me = UserStore.getCurrentUser();
+
+    if (!message.content.startsWith("Your permissions: ")) return;
+
+    const _message: Message & { referenced_message?: { author?: { id: string; }; }; } = message as any;
+
+    // Full message reference unavailable, fetch it
+    if (!_message.referenced_message) {
+        if (!_message.messageReference) return; // ???
+        _message.referenced_message = MessageStore.getMessage(_message.messageReference.channel_id, _message.messageReference.message_id);
+        console.log("FETCHED REFERENCED MESSAGE: ", _message.referenced_message);
+    }
+
+    // Not our permissions
+    if (_message.referenced_message && _message.referenced_message.author && _message.referenced_message.author.id !== me.id) return;
+
+    const permissions = message.content.replace("Your permissions: ", "").split(", ")
+        .filter(messagePerm => UserModerationPermissions.includes(messagePerm as UserModerationPermission));
+    localChannelPermissions[message.channel_id] = permissions as UserModerationPermission[];
+}
+
 const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic: boolean; }) => {
     // if (optimistic) return;
     const messageChannel = ChannelStore.getChannel(message.channel_id);
@@ -488,10 +522,14 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
 
     if (messageChannel.type !== 2) return; // Not a voice channel
 
+    let { content } = message;
+
+    // TODO: Don't check this here
+    if (content.startsWith("Your permissions: "))
+        evaluateChannelPermissions(message);
+
     // Not our channel
     if (!voiceChannelIsOwner(messageChannel, me.id)) return;
-
-    let { content } = message;
 
     // Shortcuts
     // TODO: Don't check this here, maybe make configurable?
@@ -502,14 +540,6 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
     if (message.author.id === me.id) return; // Message was sent by us
 
     const userModeratorPermissions = getModeratorUsers()[message.author.id];
-
-    if (content.startsWith(".permissions")) {
-        if (!userModeratorPermissions)
-            return sendMessage(messageChannel.id, "You are not a moderator", message.id);
-
-        return sendMessage(messageChannel.id, `Your permissions: ${userModeratorPermissions.join(", ")}`, message.id);
-    }
-
     if (!userModeratorPermissions) return; // Sender is not a moderator
 
     const messageParts = content
@@ -543,7 +573,7 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
 
         // It's us
         if (userId === me.id) {
-            sendMessage(messageChannel.id, "I own the channel", message.id);
+            return sendMessage(messageChannel.id, "I own the channel", message.id);
         }
 
         // User doesn't have any permissions
@@ -573,11 +603,13 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
         }
     }
 
-    // TODO: Accept +/- prefix and calculate the slot count the bot is then given
     if (command === "limit") {
-        const newSlotCount = parseSlotCount(commandArg, messageChannel.userLimit);
-        if (!newSlotCount) return sendMessage(messageChannel.id, content);
-        content = `!voice-limit ${newSlotCount}`;
+        // const newSlotCount = parseSlotCount(commandArg, messageChannel.userLimit);
+        // if (!newSlotCount) return sendMessage(messageChannel.id, content);
+
+        // TODO: Fix the above
+        if (commandArg === "+1")
+            content = `!voice-limit ${(messageChannel.userLimit || 0) + 1}`;
     }
 
     // Channel name argument is too short or too long
@@ -616,9 +648,22 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
         // userIsChannelOwner = voiceChannelIsOwner(userVoiceChannel, user.id);
     }
 
+    const userIsOwner = userVoiceChannel && voiceChannelIsOwner(userVoiceChannel, user.id);
     const userInMyVoice = myVoiceChannel?.id === userVoiceChannel?.id;
 
-    if (amChannelOwner && myVoiceChannel && userInMyVoice && settings.store.voiceKick)
+    // TODO: Do this differently
+    const permOverwrites = {
+        kick: false,
+        ban: false,
+        limit: false,
+        lock: false,
+        rename: false
+    };
+    if (myVoiceChannel && localChannelPermissions[myVoiceChannel.id])
+        for (const perm of localChannelPermissions[myVoiceChannel.id])
+            permOverwrites[perm] = true;
+
+    if (!userIsOwner && (permOverwrites.kick || amChannelOwner) && myVoiceChannel && userInMyVoice && settings.store.voiceKick)
         children.push(
             <Menu.MenuItem
                 id="vc-kick-user"
@@ -627,7 +672,7 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
             />
         );
 
-    if (amChannelOwner && myVoiceChannel && userInMyVoice && settings.store.voiceBan)
+    if (!userIsOwner && (permOverwrites.ban || amChannelOwner) && myVoiceChannel && userInMyVoice && settings.store.voiceBan)
         children.push(
             <Menu.MenuItem
                 id="vc-ban-user"
@@ -636,7 +681,7 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
             />
         );
 
-    if (amChannelOwner && myVoiceChannel && settings.store.voiceUnban)
+    if (!userIsOwner && (permOverwrites.ban || amChannelOwner) && myVoiceChannel && settings.store.voiceUnban)
         children.push(
             <Menu.MenuItem
                 id="vc-unban-user"
@@ -762,7 +807,19 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
         );
     }
 
-    if (amChannelOwner && amInChannel && settings.store.voiceLimit) {
+    // TODO: Do this differently
+    const permOverwrites = {
+        kick: false,
+        ban: false,
+        limit: false,
+        lock: false,
+        rename: false
+    };
+    if (myVoiceChannel && localChannelPermissions[myVoiceChannel.id])
+        for (const perm of localChannelPermissions[myVoiceChannel.id])
+            permOverwrites[perm] = true;
+
+    if ((permOverwrites.limit || amChannelOwner) && amInChannel && settings.store.voiceLimit) {
         const userLimitOptionElements: JSX.Element[] = [];
         userLimitOptionElements.push(
             <Menu.MenuItem
@@ -807,7 +864,7 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
         );
     }
 
-    if (amChannelOwner && amInChannel && settings.store.voiceRename) {
+    if ((permOverwrites.rename || amChannelOwner) && amInChannel && settings.store.voiceRename) {
         if (settings.store.voiceRenamePresets.length > 0) {
             const ESCAPE_SEQUENCE = "#$#COMMA#$#";
             const voiceRenamePresets = settings.store.voiceRenamePresets
@@ -864,7 +921,7 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
             />
         );
 
-    if (amChannelOwner && amInChannel && settings.store.voiceLock) {
+    if ((permOverwrites.lock || amChannelOwner) && amInChannel && settings.store.voiceLock) {
         if (voiceChannelIsLocked(myVoiceChannel!))
             children.push(
                 <Menu.MenuItem
@@ -1019,7 +1076,7 @@ export function VoiceChannelEventsModal({ modalProps, voiceChannelId }: VoiceCha
             </ModalContent>
         </ModalRoot >
     );
-};
+}
 
 interface TextInputModalProps {
     modalProps: ModalProps;
