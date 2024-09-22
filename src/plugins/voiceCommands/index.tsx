@@ -29,6 +29,7 @@ import { Channel, Message, User } from "discord-types/general";
 import { PropsWithChildren } from "react";
 
 // TODO: -
+// - Show ban/unban option depending on the user's ban status
 // - Fix transfer confirm
 // - Icons for permission context menu
 // - Show stream viewers at the bottom on private servers
@@ -282,9 +283,16 @@ function userToggleAllPermissions(userId: string) {
     setModeratorUsers(moderatorUsers);
 }
 
+const DISCORD_USER_TAG_PATTERN = /(?:<@)?!?(\d+)(?:n?)>?/g;
+
+function userIdsFromString(str: string): string[] {
+    return [...str.matchAll(DISCORD_USER_TAG_PATTERN)]
+        .map(match => match[1]);
+}
+
 function userIdFromTag(userTag: string): string | undefined {
     // Valid inputs: <@!934357855853748264>, <@934357855853748264n>, <@934357855853748264n>, 934357855853748264
-    const matches = /(?:<@)?!?(\d+)(?:n?)>?/g.exec(userTag);
+    const matches = DISCORD_USER_TAG_PATTERN.exec(userTag);
     if (!matches) return undefined;
     return matches[1];
 
@@ -512,6 +520,57 @@ function evaluateChannelPermissions(message: Message) {
     localChannelPermissions[message.channel_id] = permissions as UserModerationPermission[];
 }
 
+function getBotMessageContent(message: Message): string | undefined {
+    if (!message.author || !message.author.id) return;
+
+    // TODO: Don't do this
+    if (!message.author.bot) return;
+
+    // Check for the bot message embed
+    if (!message.embeds || message.embeds.length === 0) return;
+    const description = message.embeds[0].rawDescription || (message.embeds[0] as any/* ???*/).description;
+    if (!message.embeds[0] || !description) return;
+
+    return description;
+}
+
+let lastBan = -1;
+
+function checkForBanResponse(message: Message) {
+    const botResponse = getBotMessageContent(message);
+    if (!botResponse) return; // Not a bot response
+
+    // TODO: Don't do this
+    pauseBanScan = false;
+
+    // TODO: Don't do this
+    if (!botResponse.includes("Sprachkanal gebannt") && !botResponse.includes("you banned")) return;
+
+    const userTags = userIdsFromString(botResponse);
+    // First tag should be us, second should be the user that was banned
+    if (userTags.length !== 2) return;
+
+    const me = UserStore.getCurrentUser();
+
+    // Not our ban
+    if (userTags[0] !== me.id) return;
+
+    lastBan = Date.now();
+
+    // console.log("LAST BAN", lastBan);
+
+    // Full message reference unavailable, fetch it
+    // if (!_message.referenced_message) {
+    //     if (!_message.messageReference) return; // ???
+    //     _message.referenced_message = MessageStore.getMessage(_message.messageReference.channel_id, _message.messageReference.message_id);
+    //     console.log("FETCHED REFERENCED MESSAGE: ", _message.referenced_message);
+    // }
+
+    // Not our permissions
+    // if (_message.referenced_message && _message.referenced_message.author && _message.referenced_message.author.id !== me.id) return;
+
+}
+
 const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic: boolean; }) => {
     // if (optimistic) return;
     const messageChannel = ChannelStore.getChannel(message.channel_id);
@@ -524,6 +583,10 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
 
     let { content } = message;
 
+    // Check for the bot responding to our ban command
+    checkForBanResponse(message);
+
+    // Check for the channel owner responding to .permissions
     // TODO: Don't check this here
     if (content.startsWith("Your permissions: "))
         evaluateChannelPermissions(message);
@@ -619,6 +682,77 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
     sendMessage(messageChannel.id, content);
 };
 
+// TODO: Manually configure this for each server (or determine it on the first failed ban(!!!!!!!!!!!!!))
+const BAN_COOLDOWN = 15 * 1000;
+
+let pauseBanScan = false;
+setInterval(() => {
+    const banUserId = vcBanQueue[0];
+    // No bans queued
+    if (!banUserId) return;
+
+    // Get voice states
+    const me = UserStore.getCurrentUser();
+    const myVoiceState = VoiceStateStore.getVoiceStateForUser(me.id);
+    if (!myVoiceState || !myVoiceState.channelId) return;
+    const banUserVoiceState = VoiceStateStore.getVoiceStateForUser(banUserId);
+    if (!banUserVoiceState || !banUserVoiceState.channelId) return;
+
+    // User is not in our channel, remove ban from queue
+    if (myVoiceState.channelId !== banUserVoiceState.channelId)
+        return vcBanQueue.splice(0, 1);
+
+    // Cooldown didn't expire yet
+    const msSinceLastBan = Date.now() - lastBan;
+    if (msSinceLastBan <= (BAN_COOLDOWN + 1000/* Just to be safe */)) return;
+
+    // Get our voice channel
+    let myVoiceChannel: Channel | undefined = undefined;
+    let amChannelOwner = false;
+    if (myVoiceState && myVoiceState.channelId) {
+        myVoiceChannel = ChannelStore.getChannel(myVoiceState.channelId);
+        amChannelOwner = voiceChannelIsOwner(myVoiceChannel, me.id);
+    }
+
+    // Not our channel
+    if (!amChannelOwner) return;
+
+    // Scan is paused (TODO: ???)
+    if (pauseBanScan) return;
+
+    // Remove the current queue item
+    vcBanQueue.splice(0, 1);
+
+    sendMessage(myVoiceChannel!.id, `!voice-ban <@${banUserId}>`);
+
+    pauseBanScan = true;
+}, 800);
+
+let banCounterBadge: HTMLDivElement | null = null;
+setInterval(() => {
+    const msSinceLastBan = Date.now() - lastBan;
+
+    // Update the cooldown counter
+    if (banCounterBadge) {
+        const selectedUserId = banCounterBadge.dataset.userId;
+        const selectedBannedUserIdIndex = vcBanQueue.findIndex(userId => userId === selectedUserId);
+        if (selectedUserId && selectedBannedUserIdIndex > -1) {
+            const selectedUserVoiceState = VoiceStateStore.getVoiceStateForUser(selectedUserId);
+            if (selectedUserVoiceState && selectedUserVoiceState.channelId) {
+
+                const totalCooldown = (selectedBannedUserIdIndex + 1) * BAN_COOLDOWN;
+                const currentCooldownMs = totalCooldown - msSinceLastBan;
+                const currentCooldown = ((currentCooldownMs % 60000) / 1000).toFixed(0);
+                if (msSinceLastBan < BAN_COOLDOWN)
+                    banCounterBadge.innerText = "" + currentCooldown;
+            }
+        }
+    }
+}, 100);
+
+// setInterval();
+const vcBanQueue: string[] = [];
+
 const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: UserContextProps) => {
     const me = UserStore.getCurrentUser();
     if (!user || user.id === me.id) return;
@@ -672,14 +806,37 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
             />
         );
 
-    if (!userIsOwner && (permOverwrites.ban || amChannelOwner) && myVoiceChannel && userInMyVoice && settings.store.voiceBan)
-        children.push(
-            <Menu.MenuItem
-                id="vc-ban-user"
-                label="Ban user"
-                action={() => sendMessage(myVoiceChannel!.id, `!voice-ban <@${user.id}>`)}
-            />
-        );
+    // if (!userIsOwner && (permOverwrites.ban || amChannelOwner) && myVoiceChannel && userInMyVoice && settings.store.voiceBan)
+    if (userInMyVoice) {
+        const queuedUserBanIndex = vcBanQueue.findIndex(userId => userId === user.id);
+
+        if (queuedUserBanIndex > -1) {
+            children.push(
+                <Menu.MenuItem
+                    id="vc-ban-user"
+                    label=""
+                    render={() => (
+                        <div className="item_d90b3d labelContainer_d90b3d colorDefault_d90b3d" role="menuitem" id="user-context-vc-ban-user" tabIndex={-1} data-menu-item="true" style={{ backgroundColor: "rgba(237, 66, 69, 0.2)" }}>
+                            <div className="label_d90b3d">Banning...</div>
+                            <div className="iconContainer_d90b3d">
+                                <div className="vc-plugins-badge" style={{ padding: "0 4px", width: "1.1em", color: "#111111", backgroundColor: "rgb(237, 66, 69)", justifySelf: "flex-end", marginLeft: "auto" }} data-user-id={user.id} ref={el => banCounterBadge = el}></div>
+                            </div>
+                        </div>
+                    )}
+                    action={() => vcBanQueue.splice(queuedUserBanIndex, 1)}
+                />
+            );
+        } else {
+            children.push(
+                <Menu.MenuItem
+                    id="vc-ban-user"
+                    label="Ban user"
+                    action={() => vcBanQueue.push(user.id)}
+                />
+            );
+        }
+    }
+
 
     if (!userIsOwner && (permOverwrites.ban || amChannelOwner) && myVoiceChannel && settings.store.voiceUnban)
         children.push(
