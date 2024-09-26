@@ -29,6 +29,14 @@ import { Channel, Message, User } from "discord-types/general";
 import { PropsWithChildren } from "react";
 
 // TODO: -
+// - Allow command redirection if we aren't the channel owner but have permissions
+//  - @moderatoruser .k 123456789012345678
+// - Remember permissions
+//  - Re-check on failed commands? Reply with permissions to failed commands?
+// - Respond to kicks/bans that fail due to immunity with a specific message
+// - Only respond to .permissions command if we own the channel
+// - Respect ban cooldown for blocked users
+// - Respect ban cooldown if channel not owned by us
 // - Show ban/unban option depending on the user's ban status
 // - Fix transfer confirm
 // - Icons for permission context menu
@@ -40,6 +48,16 @@ import { PropsWithChildren } from "react";
 // - Queue bans if cooldown still in effect
 //  - Kick users until the cooldown expires
 //  - Calculate cooldown from failed commands
+
+const isNumber = num => {
+    if (typeof num === "number") {
+        return num - num === 0;
+    }
+    if (typeof num === "string" && num.trim() !== "") {
+        return Number.isFinite ? Number.isFinite(+num) : isFinite(+num);
+    }
+    return false;
+};
 
 type IconProps = JSX.IntrinsicElements["svg"];
 interface BaseIconProps extends IconProps {
@@ -352,19 +370,18 @@ const voiceChannelStateGetOwner = (voiceChannel: Channel): string | undefined =>
         .find(user => user && voiceChannelIsOwner(voiceChannel, user.id))
         ?.id;
 
-function parseSlotCount(countString: string, currentSlots: number): number | undefined {
+function parseSlotCount(countString: string, currentSlots: number = 0): number | undefined {
     let strippedCountString = countString;
     if (countString.startsWith("+") || countString.startsWith("-")) {
         if (countString.length < 2) return; // No number after the prefix
-        strippedCountString = countString.substring(0, 1);
+        strippedCountString = countString.substring(1);
     }
+    if (!isNumber(strippedCountString)) return;
+    const count = parseInt(strippedCountString);
 
-    const count = parseInt(strippedCountString, 10);
-    if (isNaN(count)) return;
-
-    // Length changed due to stripped operator, add slot count to existing one
+    // Length changed due to stripped operator, calculate slot count
     if (countString.length !== strippedCountString.length)
-        return currentSlots + count;
+        return countString.startsWith("+") ? currentSlots + count : currentSlots - count;
 
     return count;
 }
@@ -601,6 +618,7 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
     if (content.startsWith(".lmt ")) content = content.replace(".lmt ", "!voice-limit ");
 
     if (message.author.id === me.id) return; // Message was sent by us
+    if (voiceChannelIsOwner(messageChannel, message.author.id)) return; // Message was sent by the channel owner
 
     const userModeratorPermissions = getModeratorUsers()[message.author.id];
     if (!userModeratorPermissions) return; // Sender is not a moderator
@@ -614,6 +632,29 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
 
     const command = messageParts[0];
 
+    // TODO: Don't do this here
+    if (command === "permissions") {
+        // User is not a moderator
+        if (!userModeratorPermissions) return;
+
+        // No user ID provided, get the message author's permissions
+        if (messageParts.length < 2)
+            return sendMessage(messageChannel.id, `Your permissions: ${userModeratorPermissions.join(", ")}`, message.id);
+
+        const userId = userIdFromTag(messageParts[1]);
+        if (!userId) return;
+
+        // It's us
+        if (userId === me.id)
+            return sendMessage(messageChannel.id, "I own the channel", message.id);
+
+        // User doesn't have any permissions
+        const userPermissions = userGetPermissions(userId);
+        if (!userPermissions) return sendMessage(messageChannel.id, `${userGetName(userId)} is not a moderator`, message.id);
+
+        return sendMessage(messageChannel.id, `Permissions: ${userPermissions.join(", ")}`, message.id);
+    }
+
     let permissionName = command;
     if (command === "unban") permissionName = "ban"; // Shitty hack
     if (command === "unlock") permissionName = "lock"; // Shitty hack
@@ -623,28 +664,6 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
         if (messageParts.length < 2) return; // Command argument missing
 
     const commandArg = messageParts[1];
-
-    if (command === "permissions") {
-        // User is not a moderator
-        if (!userModeratorPermissions) return;
-
-        // No user ID provided, get the message author's permissions
-        if (!commandArg) return sendMessage(messageChannel.id, `Your permissions: ${userModeratorPermissions.join(", ")}`, message.id);
-
-        const userId = userIdFromTag(commandArg);
-        if (!userId) return;
-
-        // It's us
-        if (userId === me.id) {
-            return sendMessage(messageChannel.id, "I own the channel", message.id);
-        }
-
-        // User doesn't have any permissions
-        const userPermissions = userGetPermissions(userId);
-        if (!userPermissions) return sendMessage(messageChannel.id, `${userGetName(userId)} is not a moderator`, message.id);
-
-        return sendMessage(messageChannel.id, `Permissions: ${userPermissions.join(", ")}`, message.id);
-    }
 
     // No permissions for command
     if (!userModeratorPermissions.includes(permissionName as UserModerationPermission)) return;
@@ -667,12 +686,9 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
     }
 
     if (command === "limit") {
-        // const newSlotCount = parseSlotCount(commandArg, messageChannel.userLimit);
-        // if (!newSlotCount) return sendMessage(messageChannel.id, content);
-
-        // TODO: Fix the above
-        if (commandArg === "+1")
-            content = `!voice-limit ${(messageChannel.userLimit || 0) + 1}`;
+        const newSlotCount = parseSlotCount(commandArg, messageChannel.userLimit);
+        if (newSlotCount !== undefined)
+            return sendMessage(messageChannel.id, `!voice-limit ${newSlotCount}`);
     }
 
     // Channel name argument is too short or too long
@@ -806,8 +822,7 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
             />
         );
 
-    // if (!userIsOwner && (permOverwrites.ban || amChannelOwner) && myVoiceChannel && userInMyVoice && settings.store.voiceBan)
-    if (userInMyVoice) {
+    if (!userIsOwner && (permOverwrites.ban || amChannelOwner) && myVoiceChannel && userInMyVoice && settings.store.voiceBan) {
         const queuedUserBanIndex = vcBanQueue.findIndex(userId => userId === user.id);
 
         if (queuedUserBanIndex > -1) {
