@@ -29,9 +29,10 @@ import { Button, ChannelStore, Clipboard, Forms, GuildMemberStore, GuildStore, M
 import { PropsWithChildren } from "react";
 
 // TODO: -
+// - Display join/leave events in channel chat
 // - Event log user context menu
 // - Auto-claim channel when no owner present
-// - Channel resize: Current user count + 1
+// - Channel resize: Customize options / Current user count + 1
 // - Voice input ("voicecommand: ban last user")
 // - Auto join full channels when slot becomes free
 // - ? Fix .permissions <uid> command
