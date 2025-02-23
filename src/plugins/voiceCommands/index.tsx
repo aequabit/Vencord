@@ -25,10 +25,15 @@ import { ModalContent, ModalFooter, ModalHeader, ModalProps, ModalRoot, ModalSiz
 import definePlugin, { OptionType } from "@utils/types";
 import { findByCodeLazy, findByPropsLazy, findComponentByCodeLazy, findLazy, findStoreLazy } from "@webpack";
 import { Button, ChannelStore, Clipboard, Forms, GuildMemberStore, GuildStore, Menu, MessageActions, MessageStore, PermissionsBits, RestAPI, SelectedChannelStore, SnowflakeUtils, Text, TextInput, Timestamp, Toasts, UserStore } from "@webpack/common";
+import { Channel, Message, User } from "discord-types/general";
 // import { Channel, Message, User } from "discord-types/general";
 import { PropsWithChildren } from "react";
 
 // TODO: -
+// - Use Discord native permission to rename channel if available
+// - Automatically set channel settings (bitrate, nsfw ...)
+// - Prevent links on HBF
+// - User limit textbox validate input
 // - Display join/leave events in channel chat
 // - Event log user context menu
 // - Auto-claim channel when no owner present
@@ -67,10 +72,13 @@ const isNumber = num => {
     return false;
 };
 
-type IconProps = JSX.IntrinsicElements["svg"];
 interface BaseIconProps extends IconProps {
     viewBox: string;
 }
+
+type IconProps = JSX.IntrinsicElements["svg"];
+type ImageProps = JSX.IntrinsicElements["img"];
+
 function Icon({ height = 24, width = 24, className, children, viewBox, ...svgProps }: PropsWithChildren<BaseIconProps>) {
     return (
         <svg
@@ -94,7 +102,7 @@ function UserWaveIcon({ height = 24, width = 24, className }: IconProps) {
             className={classes(className, "vc-user-wave-icon")}
             viewBox="0 0 24 24"
         >
-            <g fill="none" fill-rule="evenodd">
+            <g fill="none" fillRule="evenodd">
                 <path fill="white" d="M13 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"></path><path fill="white" d="M3 5v-.75C3 3.56 3.56 3 4.25 3s1.24.56 1.33 1.25C6.12 8.65 9.46 12 13 12h1a8 8 0 0 1 8 8 2 2 0 0 1-2 2 .21.21 0 0 1-.2-.15 7.65 7.65 0 0 0-1.32-2.3c-.15-.2-.42-.06-.39.17l.25 2c.02.15-.1.28-.25.28H9a2 2 0 0 1-2-2v-2.22c0-1.57-.67-3.05-1.53-4.37A15.85 15.85 0 0 1 3 5Z"></path>
             </g>
         </Icon>
@@ -109,8 +117,8 @@ function CallHangupIcon({ height = 24, width = 24, className }: IconProps) {
             className={classes(className, "vc-user-wave-icon")}
             viewBox="0 0 24 24"
         >
-            <g fill="none" fill-rule="evenodd">
-                <defs><clipPath id="__lottie_element_151"><rect width={width} height={height} x="0" y="0"></rect></clipPath><clipPath id="__lottie_element_153"><path d="M0,0 L600,0 L600,600 L0,600z"></path></clipPath></defs><g clip-path="url(#__lottie_element_151)"><g clip-path="url(#__lottie_element_153)" transform="matrix(0.03999999910593033,0,0,0.03999999910593033,0,0)" opacity="1" style={{ display: "block" }}><g transform="matrix(25,0,0,25,300,315)" opacity="1" style={{ display: "block" }}><g opacity="1" transform="matrix(1,0,0,1,0,-0.6100000143051147)"><path fill="white" fill-opacity="1" d=" M9.335000038146973,-1.8179999589920044 C4.184999942779541,-6.9670000076293945 -4.164000034332275,-6.9670000076293945 -9.312999725341797,-1.8179999589920044 C-11.690999984741211,0.5609999895095825 -11.35099983215332,3.6040000915527344 -9.555999755859375,5.39900016784668 C-9.300999641418457,5.6539998054504395 -8.909000396728516,5.7129998207092285 -8.59000015258789,5.544000148773193 C-8.59000015258789,5.544000148773193 -4.269999980926514,3.256999969482422 -4.269999980926514,3.256999969482422 C-3.871000051498413,3.0460000038146973 -3.683000087738037,2.5769999027252197 -3.8259999752044678,2.1489999294281006 C-3.8259999752044678,2.1489999294281006 -4.558000087738037,-0.04600000008940697 -4.558000087738037,-0.04600000008940697 C-1.8250000476837158,-1.9980000257492065 1.8459999561309814,-1.9980000257492065 4.578999996185303,-0.04600000008940697 C4.578999996185303,-0.04600000008940697 3.815000057220459,2.757999897003174 3.815000057220459,2.757999897003174 C3.693000078201294,3.2070000171661377 3.9240000247955322,3.677000045776367 4.354000091552734,3.8540000915527344 C4.354000091552734,3.8540000915527344 8.63599967956543,5.617000102996826 8.63599967956543,5.617000102996826 C8.946000099182129,5.744999885559082 9.303000450134277,5.672999858856201 9.539999961853027,5.435999870300293 C11.331999778747559,3.6440000534057617 11.708999633789062,0.5559999942779541 9.335000038146973,-1.8179999589920044z"></path></g></g></g></g>
+            <g fill="none" fillRule="evenodd">
+                <defs><clipPath id="__lottie_element_151"><rect width={width} height={height} x="0" y="0"></rect></clipPath><clipPath id="__lottie_element_153"><path d="M0,0 L600,0 L600,600 L0,600z"></path></clipPath></defs><g clipPath="url(#__lottie_element_151)"><g clipPath="url(#__lottie_element_153)" transform="matrix(0.03999999910593033,0,0,0.03999999910593033,0,0)" opacity="1" style={{ display: "block" }}><g transform="matrix(25,0,0,25,300,315)" opacity="1" style={{ display: "block" }}><g opacity="1" transform="matrix(1,0,0,1,0,-0.6100000143051147)"><path fill="white" fillOpacity="1" d=" M9.335000038146973,-1.8179999589920044 C4.184999942779541,-6.9670000076293945 -4.164000034332275,-6.9670000076293945 -9.312999725341797,-1.8179999589920044 C-11.690999984741211,0.5609999895095825 -11.35099983215332,3.6040000915527344 -9.555999755859375,5.39900016784668 C-9.300999641418457,5.6539998054504395 -8.909000396728516,5.7129998207092285 -8.59000015258789,5.544000148773193 C-8.59000015258789,5.544000148773193 -4.269999980926514,3.256999969482422 -4.269999980926514,3.256999969482422 C-3.871000051498413,3.0460000038146973 -3.683000087738037,2.5769999027252197 -3.8259999752044678,2.1489999294281006 C-3.8259999752044678,2.1489999294281006 -4.558000087738037,-0.04600000008940697 -4.558000087738037,-0.04600000008940697 C-1.8250000476837158,-1.9980000257492065 1.8459999561309814,-1.9980000257492065 4.578999996185303,-0.04600000008940697 C4.578999996185303,-0.04600000008940697 3.815000057220459,2.757999897003174 3.815000057220459,2.757999897003174 C3.693000078201294,3.2070000171661377 3.9240000247955322,3.677000045776367 4.354000091552734,3.8540000915527344 C4.354000091552734,3.8540000915527344 8.63599967956543,5.617000102996826 8.63599967956543,5.617000102996826 C8.946000099182129,5.744999885559082 9.303000450134277,5.672999858856201 9.539999961853027,5.435999870300293 C11.331999778747559,3.6440000534057617 11.708999633789062,0.5559999942779541 9.335000038146973,-1.8179999589920044z"></path></g></g></g></g>
             </g>
         </Icon >
     );
@@ -124,8 +132,8 @@ function CheckmarkIcon({ height = 24, width = 24, className }: IconProps) {
             className={classes(className, "vc-checkmark-icon")}
             viewBox="0 0 24 24"
         >
-            <g fill="none" fill-rule="evenodd">
-                <path fill="var(--white-500)" fill-rule="evenodd" d="M12 23a11 11 0 1 0 0-22 11 11 0 0 0 0 22Zm5.7-13.3a1 1 0 0 0-1.4-1.4L10 14.58l-2.3-2.3a1 1 0 0 0-1.4 1.42l3 3a1 1 0 0 0 1.4 0l7-7Z" clip-rule="evenodd" ></path>
+            <g fill="none" fillRule="evenodd">
+                <path fill="var(--white-500)" fillRule="evenodd" d="M12 23a11 11 0 1 0 0-22 11 11 0 0 0 0 22Zm5.7-13.3a1 1 0 0 0-1.4-1.4L10 14.58l-2.3-2.3a1 1 0 0 0-1.4 1.42l3 3a1 1 0 0 0 1.4 0l7-7Z" clipRule="evenodd" ></path>
             </g>
         </Icon>
     );
@@ -566,7 +574,7 @@ function checkForBanResponse(message: Message) {
     if (!botResponse) return; // Not a bot response
 
     // TODO: Don't do this
-    pauseBanScan = false;
+    // pauseBanScan = false;
 
     // TODO: Don't do this
     if (!botResponse.includes("Sprachkanal gebannt") && !botResponse.includes("you banned")) return;
@@ -631,7 +639,7 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
     if (voiceChannelIsOwner(messageChannel, message.author.id)) return; // Message was sent by the channel owner
 
     // Check for the bot responding to our ban command
-    checkForBanResponse(message);
+    // checkForBanResponse(message);
 
     // Shortcuts
     // TODO: Don't check this here, maybe make configurable?
@@ -650,6 +658,8 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
     if (messageParts.length < 1) return; // Message is empty
 
     const command = messageParts[0];
+
+    console.log("659 command", command);
 
     // TODO: Don't do this here
     if (command === "permissions") {
