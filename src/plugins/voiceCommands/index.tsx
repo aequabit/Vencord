@@ -20,11 +20,12 @@ import { NavContextMenuPatchCallback } from "@api/ContextMenu";
 import { showNotification } from "@api/Notifications";
 import { definePluginSettings, Settings } from "@api/Settings";
 import { classNameFactory } from "@api/Styles";
+import { copyToClipboard } from "@utils/clipboard.ts";
 import { classes } from "@utils/misc";
 import { ModalContent, ModalFooter, ModalHeader, ModalProps, ModalRoot, ModalSize, openModalLazy } from "@utils/modal";
 import definePlugin, { OptionType } from "@utils/types";
 import { findByCodeLazy, findByPropsLazy, findComponentByCodeLazy, findLazy, findStoreLazy } from "@webpack";
-import { Button, ChannelStore, Clipboard, Forms, GuildMemberStore, GuildStore, Menu, MessageActions, MessageStore, PermissionsBits, RestAPI, SelectedChannelStore, SnowflakeUtils, Text, TextInput, Timestamp, Toasts, UserStore } from "@webpack/common";
+import { Button, ChannelStore, Forms, GuildMemberStore, GuildStore, Menu, MessageActions, MessageStore, PermissionsBits, RestAPI, SelectedChannelStore, SnowflakeUtils, Text, TextInput, Timestamp, Toasts, UserStore } from "@webpack/common";
 import { Channel, Message, User } from "discord-types/general";
 // import { Channel, Message, User } from "discord-types/general";
 import { PropsWithChildren } from "react";
@@ -1211,7 +1212,7 @@ export function VoiceChannelEventsModal({ modalProps, voiceChannelId }: VoiceCha
 
     const copyUserName = (userId: string) => {
         const username = getUsername(userId);
-        Clipboard.copy(username);
+        copyToClipboard(username);
         Toasts.show({
             id: Toasts.genId(),
             message: "Copied username to clipboard: " + username,
