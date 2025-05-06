@@ -20,7 +20,7 @@ import { NavContextMenuPatchCallback } from "@api/ContextMenu";
 import { showNotification } from "@api/Notifications";
 import { definePluginSettings, Settings } from "@api/Settings";
 import { classNameFactory } from "@api/Styles";
-import { copyToClipboard } from "@utils/clipboard.ts";
+import { copyToClipboard } from "@utils/clipboard";
 import { classes } from "@utils/misc";
 import { ModalContent, ModalFooter, ModalHeader, ModalProps, ModalRoot, ModalSize, openModalLazy } from "@utils/modal";
 import definePlugin, { OptionType } from "@utils/types";
@@ -28,9 +28,10 @@ import { findByCodeLazy, findByPropsLazy, findComponentByCodeLazy, findLazy, fin
 import { Button, ChannelStore, Forms, GuildMemberStore, GuildStore, Menu, MessageActions, MessageStore, PermissionsBits, RestAPI, SelectedChannelStore, SnowflakeUtils, Text, TextInput, Timestamp, Toasts, UserStore } from "@webpack/common";
 import { Channel, Message, User } from "discord-types/general";
 // import { Channel, Message, User } from "discord-types/general";
-import { PropsWithChildren } from "react";
+import { JSX, PropsWithChildren } from "react";
 
 // TODO: -
+// - Indicate disabled camera in-place
 // - Use Discord native permission to rename channel if available
 // - Automatically set channel settings (bitrate, nsfw ...)
 // - Prevent links on HBF
