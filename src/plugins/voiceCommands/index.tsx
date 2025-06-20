@@ -31,6 +31,7 @@ import { Channel, Message, User } from "discord-types/general";
 import { JSX, PropsWithChildren } from "react";
 
 // TODO: -
+// - Command for changing voice channel properties (bitrate, limit without using bot)
 // - Indicate disabled camera in-place
 // - Use Discord native permission to rename channel if available
 // - Automatically set channel settings (bitrate, nsfw ...)
@@ -164,7 +165,10 @@ interface ChannelContextProps {
 }
 
 const ChannelTypes = findLazy(m => m.ANNOUNCEMENT_THREAD === 10);
-const VoiceStateStore: { getVoiceStateForUser(userId: string): VoiceState | undefined; } = findStoreLazy("VoiceStateStore");
+const VoiceStateStore: {
+    getVoiceStateForUser(userId: string): VoiceState | undefined;
+    getVoiceStatesForChannel(channelId: string): VoiceState[] | undefined;
+} = findStoreLazy("VoiceStateStore");
 const SortedVoiceStateStore = findByPropsLazy("getVoiceStatesForChannel");
 const cl = classNameFactory("vc-pindms-modal-");
 
@@ -388,7 +392,10 @@ const voiceChannelStateGetOwner = (voiceChannel: Channel): string | undefined =>
         .find(user => user && voiceChannelIsOwner(voiceChannel, user.id))
         ?.id;
 
-function parseSlotCount(countString: string, currentSlots: number = 0): number | undefined {
+function parseSlotCount(countString: string, currentUsers: number, currentSlots: number = 0): number | undefined {
+    if (countString === "!")
+        return currentUsers;
+
     let strippedCountString = countString;
     if (countString.startsWith("+") || countString.startsWith("-")) {
         if (countString.length < 2) return; // No number after the prefix
@@ -623,7 +630,10 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
 
     const me = UserStore.getCurrentUser();
     const myVoiceState = VoiceStateStore.getVoiceStateForUser(me.id);
-    if (!myVoiceState) return;
+    if (!myVoiceState || !myVoiceState.channelId) return;
+
+    const channnelVoiceStates = VoiceStateStore.getVoiceStatesForChannel(myVoiceState.channelId);
+    if (!channnelVoiceStates) return;
 
     if (messageChannel.type !== 2) return; // Not a voice channel
 
@@ -660,8 +670,6 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
     if (messageParts.length < 1) return; // Message is empty
 
     const command = messageParts[0];
-
-    console.log("659 command", command);
 
     // TODO: Don't do this here
     if (command === "permissions") {
@@ -717,7 +725,7 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
     }
 
     if (command === "limit") {
-        const newSlotCount = parseSlotCount(commandArg, messageChannel.userLimit);
+        const newSlotCount = parseSlotCount(commandArg, Object.keys(channnelVoiceStates).length, messageChannel.userLimit);
         if (newSlotCount !== undefined)
             return sendMessage(messageChannel.id, `!voice-limit ${newSlotCount}`);
     }
