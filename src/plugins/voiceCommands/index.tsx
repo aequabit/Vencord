@@ -25,7 +25,7 @@ import { classes } from "@utils/misc";
 import { ModalContent, ModalFooter, ModalHeader, ModalProps, ModalRoot, ModalSize, openModalLazy } from "@utils/modal";
 import definePlugin, { OptionType } from "@utils/types";
 import { findByCodeLazy, findByPropsLazy, findComponentByCodeLazy, findLazy, findStoreLazy } from "@webpack";
-import { Button, ChannelStore, Forms, GuildMemberStore, GuildStore, Menu, MessageActions, MessageStore, PermissionsBits, RestAPI, SelectedChannelStore, SnowflakeUtils, Text, TextInput, Timestamp, Toasts, UserStore } from "@webpack/common";
+import { Button, ChannelStore, Forms, GuildMemberStore, GuildRoleStore, Menu, MessageActions, MessageStore, PermissionsBits, RestAPI, SelectedChannelStore, SnowflakeUtils, Text, TextInput, Timestamp, Toasts, UserStore } from "@webpack/common";
 import { Channel, Message, User } from "discord-types/general";
 // import { Channel, Message, User } from "discord-types/general";
 import { JSX, PropsWithChildren } from "react";
@@ -367,7 +367,7 @@ function userInChannel(userId: string, channel: Channel) {
 function voiceChannelIsLocked(voiceChannel: Channel): boolean {
     if (voiceChannel.type !== 2) return false; // Not a voice channel
 
-    const roles = GuildStore.getRoles(voiceChannel.guild_id);
+    const roles = GuildRoleStore.getRoles(voiceChannel.guild_id);
 
     const everyoneRoleOverwrite = Object.values(voiceChannel.permissionOverwrites).find(overwrite => {
         const role = roles[overwrite.id];
