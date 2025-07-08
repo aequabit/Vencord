@@ -1064,6 +1064,8 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
     const amChannelOwner = voiceChannelIsOwner(channel, me.id);
     const amInChannel = myVoiceState?.channelId === channel.id;
 
+    const canManage = voiceChannelHasPermission(channel, me.id, PermissionsBits.MANAGE_CHANNELS);
+
     if (settings.store.voiceEventLog) {
         children.push(
             <Menu.MenuItem
@@ -1092,15 +1094,18 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
             <Menu.MenuItem
                 id="vc-change-limit-0"
                 label="No limit"
-                action={() => sendMessage(channel.id, "!voice-limit 0")}
+                action={() => canManage ? channelEdit(channel, { userLimit: 0 })
+                    : sendMessage(channel.id, "!voice-limit 0")}
             />
         );
 
+        const plusOne = (channel.userLimit || 0) + 1;
         userLimitOptionElements.push(
             <Menu.MenuItem
                 id="vc-change-limit-plusone"
                 label="+ 1"
-                action={() => sendMessage(channel.id, `!voice-limit ${(channel.userLimit || 0) + 1}`)}
+                action={() => canManage ? channelEdit(channel, { userLimit: plusOne })
+                    : sendMessage(channel.id, `!voice-limit ${plusOne}`)}
             />
         );
 
@@ -1109,7 +1114,8 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
                 <Menu.MenuItem
                     id={"vc-change-limit-" + option}
                     label={option}
-                    action={() => sendMessage(channel.id, `!voice-limit ${option}`)}
+                    action={() => canManage ? channelEdit(channel, { userLimit: option })
+                        : sendMessage(channel.id, `!voice-limit ${option}`)}
                 />
             );
 
@@ -1463,16 +1469,24 @@ export const openChannelNameChangeModal = () =>
         />;
     });
 
-export const openChannelLimitModal = () =>
+export const openChannelLimitModal = () => {
+    const me = UserStore.getCurrentUser();
+    const voiceChannel = ChannelStore.getChannel(SelectedChannelStore.getVoiceChannelId()!);
+    const canManage = voiceChannelHasPermission(voiceChannel, me.id, PermissionsBits.MANAGE_CHANNELS);
+
     openModalLazy(async () => {
         return modalProps => <TextInputModal
             modalProps={modalProps}
             modalHeading="Change channel user limit"
             inputLabel="New user limit"
             submitButtonText="Save"
-            submitCallback={result => sendMessage(SelectedChannelStore.getVoiceChannelId() as string, `!voice-limit ${parseInt(result)}`)}
+            submitCallback={
+                result => canManage
+                    ? channelEdit(voiceChannel, { userLimit: parseInt(result) })
+                    : sendMessage(voiceChannel.id, `!voice-limit ${parseInt(result)}`)}
         />;
     });
+};
 
 export const openChannelTransferConfirmModal = (userId: string, channelId: string) =>
     openModalLazy(async () => {
