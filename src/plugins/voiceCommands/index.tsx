@@ -447,15 +447,20 @@ function overwritesHavePermissions(overwrites: Channel["permissionOverwrites"]["
     return true;
 }
 
-function voiceChannelIsOwner(channel: Channel, userId: string): boolean {
-    if (!channel.permissionOverwrites || !channel.permissionOverwrites[userId]) return false;
+function voiceChannelHasPermission(channel: Channel, userId: string, permission: bigint): boolean {
+    if (!channel.permissionOverwrites || !channel.permissionOverwrites[userId])
+        return false;
     const userPermissionOverwrites = channel.permissionOverwrites[userId];
-    if (!userPermissionOverwrites) return false;
 
-    const userHasJoinPermission = userPermissionOverwrites.allow
-        && (userPermissionOverwrites.allow & PermissionsBits.CONNECT) === PermissionsBits.CONNECT;
+    const userHasPermission = userPermissionOverwrites.allow
+        && (userPermissionOverwrites.allow & permission) === permission;
 
-    return !!userHasJoinPermission;
+    return !!userHasPermission;
+}
+
+function voiceChannelIsOwner(channel: Channel, userId: string): boolean {
+    return voiceChannelHasPermission(channel, userId, PermissionsBits.MANAGE_CHANNELS)
+        || voiceChannelHasPermission(channel, userId, PermissionsBits.CONNECT); // For Zentrum
 }
 
 const onVoiceStateUpdates = ({ voiceStates }: { voiceStates: VoiceState[]; }) => {
@@ -612,14 +617,29 @@ function checkForBanResponse(message: Message) {
     // if (_message.referenced_message && _message.referenced_message.author && _message.referenced_message.author.id !== me.id) return;
 
 }
-
+interface ChannelEditProperties {
+    name?: string;
+    topic?: string;
+    bitrate?: number;
+    userLimit?: number;
+    nsfw?: boolean;
+    flags?: bigint;
+    rtcRegion?: null;
+}
 // TODO: Check if 2FA is enabled and if we have rename permissions, if yes use this instead of the bot
-async function channelRename(channelId: string, name: string) {
+async function channelEdit(channel: Channel, properties: ChannelEditProperties) {
     RestAPI.patch({
-        url: `/channels/${channelId}`,
+        url: `/channels/${channel.id}`,
         body: {
-            // name: "Kuh(🐮)le Leutis!"
-            name: name
+            name: properties.name || channel.name,
+            type: channel.type,
+            topic: properties.topic || channel.topic,
+            bitrate: properties.bitrate || channel.bitrate,
+            user_limit: properties.userLimit || channel.userLimit,
+            nsfw: properties.nsfw || channel.nsfw,
+            flags: properties.flags || channel.flags,
+            rate_limit_per_user: channel.rateLimitPerUser,
+            rtc_region: properties.rtcRegion || channel.rtcRegion
         }
     });
 }
@@ -641,7 +661,7 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
 
     console.log(me);
     if (content.startsWith(".renametest")) {
-        channelRename(messageChannel.id, "Sehr 🐮l");
+        channelEdit(messageChannel, { name: "Sehr 🐮l" });
         return;
     }
 
@@ -658,6 +678,7 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
     if (content.startsWith(".k ")) content = content.replace(".k ", "!voice-kick ");
     if (content.startsWith(".b ")) content = content.replace(".b ", "!voice-ban ");
     if (content.startsWith(".lmt ")) content = content.replace(".lmt ", "!voice-limit ");
+    if (content.startsWith(".rename ")) content = content.replace(".rename ", "!voice-rename ");
 
     const userModeratorPermissions = getModeratorUsers()[message.author.id];
     if (!userModeratorPermissions) return; // Sender is not a moderator
@@ -727,12 +748,19 @@ const onMessageCreate = ({ message, optimistic }: { message: Message; optimistic
     if (command === "limit") {
         const newSlotCount = parseSlotCount(commandArg, Object.keys(channnelVoiceStates).length, messageChannel.userLimit);
         if (newSlotCount !== undefined)
-            return sendMessage(messageChannel.id, `!voice-limit ${newSlotCount}`);
+            if (voiceChannelHasPermission(messageChannel, me.id, PermissionsBits.MANAGE_CHANNELS))
+                return channelEdit(messageChannel, { userLimit: newSlotCount });
+            else
+                return sendMessage(messageChannel.id, `!voice-limit ${newSlotCount}`);
     }
 
-    // Channel name argument is too short or too long
-    if (command === "rename" && commandArg.length < 1 || commandArg.length > 99)
-        return sendMessage(messageChannel.id, "Channel names must be between 1 and 99 characters long", message.id);
+    if (command === "rename") {
+        if (commandArg.length < 1 || commandArg.length > 99)
+            return sendMessage(messageChannel.id, "Channel names must be between 1 and 99 characters long", message.id);
+
+        if (voiceChannelHasPermission(messageChannel, me.id, PermissionsBits.MANAGE_CHANNELS))
+            return channelEdit(messageChannel, { name: messageParts.slice(1).join(" ") });
+    }
 
     sendMessage(messageChannel.id, content);
 };
@@ -1033,7 +1061,7 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
     const me = UserStore.getCurrentUser();
     const myVoiceState = VoiceStateStore.getVoiceStateForUser(me.id);
 
-    const amChannelOwner = voiceChannelIsOwner(channel, me.id);
+    const amChannelOwner = voiceChannelIsOwner(channel, me.idS);
     const amInChannel = myVoiceState?.channelId === channel.id;
 
     if (settings.store.voiceEventLog) {
