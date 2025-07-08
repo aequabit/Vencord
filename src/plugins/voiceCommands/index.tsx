@@ -1061,7 +1061,7 @@ const ChannelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
     const me = UserStore.getCurrentUser();
     const myVoiceState = VoiceStateStore.getVoiceStateForUser(me.id);
 
-    const amChannelOwner = voiceChannelIsOwner(channel, me.idS);
+    const amChannelOwner = voiceChannelIsOwner(channel, me.id);
     const amInChannel = myVoiceState?.channelId === channel.id;
 
     if (settings.store.voiceEventLog) {
