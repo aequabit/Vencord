@@ -24,12 +24,11 @@ import { copyToClipboard } from "@utils/clipboard";
 import { classes } from "@utils/misc";
 import { ModalContent, ModalFooter, ModalHeader, ModalProps, ModalRoot, ModalSize, openModalLazy } from "@utils/modal";
 import definePlugin, { OptionType } from "@utils/types";
+import { Channel, Message, User } from "@vencord/discord-types";
 import { findByCodeLazy, findByPropsLazy, findComponentByCodeLazy, findLazy, findStoreLazy } from "@webpack";
 import { Button, ChannelStore, Forms, GuildMemberStore, GuildRoleStore, Menu, MessageActions, MessageStore, PermissionsBits, RestAPI, SelectedChannelStore, SnowflakeUtils, Text, TextInput, Timestamp, Toasts, UserStore } from "@webpack/common";
-import { Channel, Message, User } from "discord-types/general";
 // import { Channel, Message, User } from "discord-types/general";
 import { JSX, PropsWithChildren } from "react";
-
 // TODO: -
 // - Command for changing voice channel properties (bitrate, limit without using bot)
 // - Indicate disabled camera in-place
@@ -844,11 +843,12 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
 
     // Get our voice state and channel
     const myVoiceState = VoiceStateStore.getVoiceStateForUser(me.id);
-    let myVoiceChannel: Channel | undefined = undefined;
+    let myVoiceChannel: Channel | null = null;
     let amChannelOwner = false;
     if (myVoiceState && myVoiceState.channelId) {
         myVoiceChannel = ChannelStore.getChannel(myVoiceState.channelId);
-        amChannelOwner = voiceChannelIsOwner(myVoiceChannel, me.id);
+        if (myVoiceChannel)
+            amChannelOwner = voiceChannelIsOwner(myVoiceChannel, me.id);
     }
 
     // Get the target user's voice state and channel
