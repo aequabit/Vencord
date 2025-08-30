@@ -366,7 +366,7 @@ function userInChannel(userId: string, channel: Channel) {
 function voiceChannelIsLocked(voiceChannel: Channel): boolean {
     if (voiceChannel.type !== 2) return false; // Not a voice channel
 
-    const roles = GuildRoleStore.getRoles(voiceChannel.guild_id);
+    const roles = GuildRoleStore.getRolesSnapshot(voiceChannel.guild_id);
 
     const everyoneRoleOverwrite = Object.values(voiceChannel.permissionOverwrites).find(overwrite => {
         const role = roles[overwrite.id];
