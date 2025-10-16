@@ -1341,11 +1341,9 @@ export function VoiceChannelEventsModal({ modalProps, voiceChannelId }: VoiceCha
             </ModalHeader>
 
             <ModalContent className={pinDmsModalCl("content")}>
-                <Forms.FormSection>
-                    <div style={{ minWidth: "480px" }} role="list" tabIndex={0} data-list-id="audit-log">
-                        {voiceChannelEvents[voiceChannelId].reverse().map(ev => createListItem(ev))}
-                    </div>
-                </Forms.FormSection>
+                <div style={{ minWidth: "480px" }} role="list" tabIndex={0} data-list-id="audit-log">
+                    {voiceChannelEvents[voiceChannelId].reverse().map(ev => createListItem(ev))}
+                </div>
             </ModalContent>
         </ModalRoot >
     );
@@ -1381,12 +1379,10 @@ export function TextInputModal({ modalProps, modalHeading, inputLabel, submitBut
             {/* form is here so when you press enter while in the text input it submits */}
             <form onSubmit={onSave}>
                 <ModalContent className={pinDmsModalCl("content")}>
-                    <Forms.FormSection>
-                        <Forms.FormTitle>{inputLabel}</Forms.FormTitle>
-                        <TextInput
-                            onChange={e => inputResult = e}
-                        />
-                    </Forms.FormSection>
+                    <Forms.FormTitle>{inputLabel}</Forms.FormTitle>
+                    <TextInput
+                        onChange={e => inputResult = e}
+                    />
                 </ModalContent>
                 <ModalFooter>
                     <Button type="submit" onClick={onSave}>{submitButtonText}</Button>
@@ -1423,9 +1419,7 @@ export function ConfirmModal({ modalProps, modalHeading, confirmText = "Confirm"
             </ModalHeader>
 
             <ModalContent className={pinDmsModalCl("content")}>
-                <Forms.FormSection>
-                    {children}
-                </Forms.FormSection >
+                {children}
             </ModalContent>
             <ModalFooter>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gridGap: "1em" }}>
@@ -1501,7 +1495,7 @@ export const openChannelTransferConfirmModal = (userId: string, channelId: strin
             submitCallback={confirmed => confirmed && sendMessage(channelId, `!voice-transfer <@${userId}>`)}
         >
             <div style={{ display: "inline-flex" }}>
-                <Forms.FormText variant="text-lg/medium" style={{ marginRight: "6px" }}><span style={{ lineHeight: "24px" }}>Transfer the current voice channel to </span></Forms.FormText>
+                <Forms.FormText size="md" style={{ marginRight: "6px" }}><span style={{ lineHeight: "24px" }}>Transfer the current voice channel to </span></Forms.FormText>
                 <UserSummaryItem
                     users={[user]}
                     count={1}
@@ -1511,7 +1505,7 @@ export const openChannelTransferConfirmModal = (userId: string, channelId: strin
                     showDefaultAvatarsForNullUsers
                     showUserPopout
                 />
-                <Forms.FormText variant="text-lg/medium" style={{ marginLeft: "4px" }}><span style={{ lineHeight: "24px" }}> {userGetName(userId, channel.guild_id)}?</span></Forms.FormText>
+                <Forms.FormText size="md" style={{ marginLeft: "4px" }}><span style={{ lineHeight: "24px" }}> {userGetName(userId, channel.guild_id)}?</span></Forms.FormText>
             </div>
         </ConfirmModal >;
     });
