@@ -16,8 +16,8 @@ export default definePlugin({
         {
             find: '"sticker")',
             replacement: {
-                match: /return\(\i\.\i\|\|(?=\(.+?(\i)\.push)/,
-                replace: "$&(Vencord.Api.ChatButtons._injectButtons($1,arguments[0]),false)||"
+                match: /let (\i)=\(0,\i\.chain\).{0,150}?;(?=return 0===\1\.length)/,
+                replace: "$&Vencord.Api.ChatButtons._injectButtons($1,arguments[0]);"
             }
         }
     ]

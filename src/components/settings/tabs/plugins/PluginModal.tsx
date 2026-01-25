@@ -20,18 +20,18 @@ import "./PluginModal.css";
 
 import { generateId } from "@api/Commands";
 import { useSettings } from "@api/Settings";
-import { classNameFactory } from "@api/Styles";
 import ErrorBoundary from "@components/ErrorBoundary";
 import { Flex } from "@components/Flex";
 import { debounce } from "@shared/debounce";
 import { gitRemote } from "@shared/vencordUserAgent";
+import { classNameFactory } from "@utils/css";
 import { proxyLazy } from "@utils/lazy";
 import { Margins } from "@utils/margins";
 import { classes, isObjectEmpty } from "@utils/misc";
 import { ModalCloseButton, ModalContent, ModalHeader, ModalProps, ModalRoot, ModalSize, openModal } from "@utils/modal";
 import { OptionType, Plugin } from "@utils/types";
 import { User } from "@vencord/discord-types";
-import { findByPropsLazy } from "@webpack";
+import { findCssClassesLazy } from "@webpack";
 import { Clickable, FluxDispatcher, Forms, React, Text, Tooltip, useEffect, UserStore, UserSummaryItem, UserUtils, useState } from "@webpack/common";
 import { Constructor } from "type-fest";
 
@@ -43,7 +43,7 @@ import { GithubButton, WebsiteButton } from "./LinkIconButton";
 
 const cl = classNameFactory("vc-plugin-modal-");
 
-const AvatarStyles = findByPropsLazy("moreUsers", "emptyUser", "avatarContainer", "clickableAvatar");
+const AvatarStyles = findCssClassesLazy("moreUsers", "avatar", "clickableAvatar");
 const UserRecord: Constructor<Partial<User>> = proxyLazy(() => UserStore.getCurrentUser().constructor) as any;
 
 interface PluginModalProps extends ModalProps {
@@ -69,7 +69,7 @@ function makeDummyUser(user: { username: string; id?: string; avatar?: string; }
 }
 
 export default function PluginModal({ plugin, onRestartNeeded, onClose, transitionState }: PluginModalProps) {
-    const pluginSettings = useSettings().plugins[plugin.name];
+    const pluginSettings = useSettings([`plugins.${plugin.name}.*`]).plugins[plugin.name];
     const hasSettings = Boolean(pluginSettings && plugin.options && !isObjectEmpty(plugin.options));
 
     const [authors, setAuthors] = useState<Partial<User>[]>([]);

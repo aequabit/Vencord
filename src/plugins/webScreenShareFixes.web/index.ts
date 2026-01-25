@@ -12,6 +12,7 @@ export default definePlugin({
     authors: [Devs.Kaitlyn],
     description: "Removes 2500kbps bitrate cap on chromium and vesktop clients.",
     enabledByDefault: true,
+
     patches: [
         {
             find: "x-google-max-bitrate",
